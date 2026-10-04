@@ -137,42 +137,19 @@ fun DashboardScreen(onOpenLogs: () -> Unit = {}, onOpenReport: () -> Unit = {}) 
             // ── 顶部欢迎条 ──
             item {
                 WafCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "实时态势",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                "共防护 $siteTotal 个网站 · 回源 ${"%.0f".format(proxyTime)} ms",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Box(
-                            Modifier
-                                .size(38.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Filled.Shield,
-                                null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
+                    ListRow(
+                        icon = Icons.Filled.Shield,
+                        title = "实时态势",
+                        subtitle = "共防护 $siteTotal 个网站 · 回源 ${"%.0f".format(proxyTime)} ms",
+                        iconTint = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
 
             // ── KPI 2x2 ──
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    GridRow {
                         MetricCard(
                             icon = Icons.Filled.Visibility,
                             label = "今日请求",
@@ -192,7 +169,7 @@ fun DashboardScreen(onOpenLogs: () -> Unit = {}, onOpenReport: () -> Unit = {}) 
                             modifier = Modifier.weight(1f)
                         )
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    GridRow {
                         MetricCard(
                             icon = Icons.Filled.Download,
                             label = "接收流量",
@@ -230,26 +207,12 @@ fun DashboardScreen(onOpenLogs: () -> Unit = {}, onOpenReport: () -> Unit = {}) 
                             modifier = Modifier.fillMaxWidth().height(140.dp)
                         )
                         if (trendLabels.isNotEmpty()) {
-                            Spacer(Modifier.height(Space.xs))
-                            Row(Modifier.fillMaxWidth()) {
-                                Text(
-                                    trendLabels.first(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.weight(1f))
-                                Text(
-                                    "峰值 ${formatNumber(trend.max().toLong())}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.weight(1f))
-                                Text(
-                                    trendLabels.last(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Spacer(Modifier.height(Space.sm))
+                            AxisLabels(
+                                left = trendLabels.first(),
+                                center = "峰值 ${formatNumber(trend.max().toLong())}",
+                                right = trendLabels.last()
+                            )
                         }
                     } else {
                         EmptyState(
@@ -334,7 +297,7 @@ fun DashboardScreen(onOpenLogs: () -> Unit = {}, onOpenReport: () -> Unit = {}) 
                     Spacer(Modifier.height(Space.md))
                     Row(
                         Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                        horizontalArrangement = Arrangement.spacedBy(Space.sm)
                     ) {
                         DonutChart(
                             percent = cpu.s("percent").toFloatOrNull() ?: 0f,
@@ -387,24 +350,23 @@ fun DashboardScreen(onOpenLogs: () -> Unit = {}, onOpenReport: () -> Unit = {}) 
             }
 
             item {
-                WafCard(onClick = onOpenReport) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Filled.Assessment, null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(Space.sm))
-                        Column(Modifier.weight(1f)) {
-                            Text("查看完整攻击报表", style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                "按 IP / URI / 时间维度深入分析",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                WafCard(
+                    onClick = onOpenReport,
+                    contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.sm)
+                ) {
+                    ListRow(
+                        icon = Icons.Filled.Assessment,
+                        title = "查看完整攻击报表",
+                        subtitle = "按 IP / URI / 时间维度深入分析",
+                        onClick = onOpenReport,
+                        trailing = {
+                            Icon(
+                                Icons.Filled.ChevronRight,
+                                null,
+                                tint = MaterialTheme.colorScheme.outline
                             )
                         }
-                        Icon(Icons.Filled.ChevronRight, null, tint = MaterialTheme.colorScheme.outline)
-                    }
+                    )
                 }
             }
         }
@@ -437,20 +399,13 @@ private fun InterceptRow(
             .padding(vertical = Space.sm),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.errorContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Icons.Filled.Block, null,
-                tint = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.size(15.dp)
-            )
-        }
-        Spacer(Modifier.width(Space.sm))
+        IconBadge(
+            icon = Icons.Filled.Block,
+            tint = MaterialTheme.colorScheme.error,
+            size = 32.dp,
+            corner = 8.dp
+        )
+        Spacer(Modifier.width(Space.md))
         Column(Modifier.weight(1f)) {
             Text(
                 ip.ifBlank { "未知 IP" },
@@ -466,7 +421,10 @@ private fun InterceptRow(
             )
         }
         Spacer(Modifier.width(Space.sm))
-        Column(horizontalAlignment = Alignment.End) {
+        Column(
+            horizontalAlignment = Alignment.End,
+            modifier = Modifier.widthIn(min = 64.dp)
+        ) {
             StatusChip(actionText, tone)
             if (risk.isNotBlank()) {
                 Spacer(Modifier.height(3.dp))
@@ -476,7 +434,6 @@ private fun InterceptRow(
                     color = MaterialTheme.colorScheme.outline,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.width(72.dp),
                     textAlign = androidx.compose.ui.text.style.TextAlign.End
                 )
             }

@@ -1,6 +1,8 @@
 package com.bt.waf.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -12,9 +14,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
@@ -144,18 +148,19 @@ fun MainScreen(onLogout: () -> Unit) {
                 drawerContainerColor = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.width(292.dp)
             ) {
-                // 品牌区
+                // 品牌区：与下方列表共用同一套左右留白（Space.lg = 16dp），
+                // 之前品牌区 16dp、列表项 10dp，抽屉左右视觉上没对齐。
                 Column(
                     Modifier
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.primaryContainer)
-                        .padding(Space.lg)
+                        .padding(horizontal = Space.lg, vertical = Space.lg)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             Modifier
-                                .size(38.dp)
-                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(MaterialTheme.colorScheme.primary),
                             contentAlignment = Alignment.Center
                         ) {
@@ -163,11 +168,11 @@ fun MainScreen(onLogout: () -> Unit) {
                                 "W",
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp
+                                fontSize = 21.sp
                             )
                         }
                         Spacer(Modifier.width(Space.md))
-                        Column {
+                        Column(Modifier.weight(1f)) {
                             Text(
                                 "堡塔云WAF",
                                 style = MaterialTheme.typography.titleMedium,
@@ -181,8 +186,6 @@ fun MainScreen(onLogout: () -> Unit) {
                         }
                     }
                 }
-                HorizontalDivider()
-
                 LazyColumn(Modifier.fillMaxSize()) {
                     DRAWER_GROUPS.forEach { group ->
                         item(key = "h_${group.title}") {
@@ -191,57 +194,91 @@ fun MainScreen(onLogout: () -> Unit) {
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(
-                                    start = 20.dp, top = 14.dp, bottom = 4.dp
+                                    start = Space.lg, end = Space.lg,
+                                    top = Space.md, bottom = Space.xs
                                 )
                             )
                         }
                         items(group.items.size, key = { group.items[it].route }) { i ->
                             val item = group.items[i]
                             val selected = currentRoute == item.route
-                            NavigationDrawerItem(
-                                label = {
-                                    Text(item.label, style = MaterialTheme.typography.bodyMedium)
-                                },
-                                selected = selected,
-                                onClick = { go(item.route); scope.launch { drawerState.close() } },
-                                icon = {
-                                    Icon(
-                                        item.icon, null,
-                                        modifier = Modifier.size(20.dp),
-                                        tint = if (selected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.onSurfaceVariant
+                            // 选中态改为「左侧 3dp 指示条 + 淡底色」：
+                            // M3 默认 NavigationDrawerItem 的整块 primaryContainer
+                            // 实心底色在 292dp 宽的抽屉里过于厚重。
+                            Row(
+                                Modifier
+                                    .padding(horizontal = Space.lg)
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (selected) MaterialTheme.colorScheme.primaryContainer
+                                        else MaterialTheme.colorScheme.surface
                                     )
-                                },
-                                colors = NavigationDrawerItemDefaults.colors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    unselectedContainerColor = MaterialTheme.colorScheme.surface
-                                ),
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 1.dp)
-                            )
+                                    .clickable {
+                                        go(item.route)
+                                        scope.launch { drawerState.close() }
+                                    }
+                                    .padding(start = Space.md, end = Space.md, top = 11.dp, bottom = 11.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    Modifier
+                                        .width(3.dp)
+                                        .height(18.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(
+                                            if (selected) MaterialTheme.colorScheme.primary
+                                            else Color.Transparent
+                                        )
+                                )
+                                Spacer(Modifier.width(Space.md))
+                                Icon(
+                                    item.icon, null,
+                                    modifier = Modifier.size(19.dp),
+                                    tint = if (selected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.width(Space.md))
+                                Text(
+                                    item.label,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                                    else MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                     item {
-                        HorizontalDivider(Modifier.padding(vertical = Space.sm))
-                        NavigationDrawerItem(
-                            label = { Text("退出登录", style = MaterialTheme.typography.bodyMedium) },
-                            selected = false,
-                            onClick = {
-                                scope.launch { drawerState.close() }
-                                scope.launch { runCatching { repo.logout() } }
-                                onLogout()
-                            },
-                            icon = {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.Logout, null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            },
-                            colors = NavigationDrawerItemDefaults.colors(
-                                unselectedContainerColor = MaterialTheme.colorScheme.surface
-                            ),
-                            modifier = Modifier.padding(horizontal = 10.dp)
+                        HorizontalDivider(
+                            Modifier.padding(horizontal = Space.lg, vertical = Space.sm)
                         )
+                        Row(
+                            Modifier
+                                .padding(horizontal = Space.lg)
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable {
+                                    scope.launch { drawerState.close() }
+                                    scope.launch { runCatching { repo.logout() } }
+                                    onLogout()
+                                }
+                                .padding(horizontal = Space.md, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Logout, null,
+                                modifier = Modifier.size(19.dp),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(Modifier.width(Space.md))
+                            Text(
+                                "退出登录",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                         Spacer(Modifier.height(Space.xl))
                     }
                 }

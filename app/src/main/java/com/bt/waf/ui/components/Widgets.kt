@@ -24,7 +24,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bt.waf.ui.theme.Space
@@ -34,55 +36,71 @@ import java.util.Locale
 
 /* ══════════════════ 基础容器 ══════════════════ */
 
-/** 统一卡片：白底 + 细边框 + 圆角，替代裸 Card。 */
+/** 全站统一的卡片形状与边框，卡片外观只由这一处决定。 */
+private val CardShape = RoundedCornerShape(16.dp)
+private val CardBorder = @Composable { BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) }
+
+/**
+ * 统一卡片。
+ *
+ * 内边距固定 [Space.lg]，全站所有卡片一致 —— 这是「对称」的基础：
+ * 之前各页面临时改 padding，导致同类内容左右留白不一致。
+ */
 @Composable
 fun WafCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    contentPadding: PaddingValues = PaddingValues(Space.lg),
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val shape = RoundedCornerShape(14.dp)
     val base = modifier.fillMaxWidth()
+    val colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     if (onClick != null) {
         Card(
             onClick = onClick,
             modifier = base,
-            shape = shape,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            shape = CardShape,
+            colors = colors,
+            border = CardBorder(),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-        ) { Column(Modifier.padding(Space.lg), content = content) }
+        ) { Column(Modifier.padding(contentPadding), content = content) }
     } else {
         Card(
             modifier = base,
-            shape = shape,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            shape = CardShape,
+            colors = colors,
+            border = CardBorder(),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-        ) { Column(Modifier.padding(Space.lg), content = content) }
+        ) { Column(Modifier.padding(contentPadding), content = content) }
     }
 }
 
-/** 区块标题：左侧竖条 + 标题 + 可选副标题/操作。 */
+/**
+ * 区块标题：左侧竖条 + 标题 + 可选副标题/操作。
+ *
+ * 竖条高度用 [IntrinsicSize.Min] + [fillMaxHeight] 让它**自动等于文字块高度**。
+ * 之前写死 32.dp / 18.dp，遇上字号不同的标题就出现竖线短一截或长一截的错位。
+ */
 @Composable
 fun SectionHeader(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    accent: Color = MaterialTheme.colorScheme.primary,
     action: (@Composable () -> Unit)? = null
 ) {
     Row(
-        modifier.fillMaxWidth(),
+        modifier.fillMaxWidth().height(IntrinsicSize.Min),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             Modifier
                 .width(3.dp)
-                .height(if (subtitle != null) 32.dp else 18.dp)
+                .fillMaxHeight()
                 .clip(RoundedCornerShape(2.dp))
-                .background(MaterialTheme.colorScheme.primary)
+                .background(accent)
         )
-        Spacer(Modifier.width(Space.sm))
+        Spacer(Modifier.width(Space.sm + 2.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 title,
@@ -90,6 +108,7 @@ fun SectionHeader(
                 color = MaterialTheme.colorScheme.onSurface
             )
             if (subtitle != null) {
+                Spacer(Modifier.height(1.dp))
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,
@@ -101,9 +120,199 @@ fun SectionHeader(
     }
 }
 
+/** 列表区块的标题行：左侧标题 + 右侧操作，垂直居中且底部留白统一。 */
+@Composable
+fun ListHeader(
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    trailing: (@Composable () -> Unit)? = null
+) {
+    Row(
+        modifier.fillMaxWidth().padding(bottom = Space.sm),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        trailing?.invoke()
+    }
+}
+
+/**
+ * 等宽栅格行。
+ *
+ * 之前各页面的 KPI / 统计区都是手写 `Row { Box(weight(1f)); Box(weight(1f)) }`，
+ * 间距靠 Spacer 手调，很容易出现「左列比右列宽」或「两列间距不等」的错位。
+ * 这里统一：列间距固定 [Space.sm]，所有列等宽。
+ */
+@Composable
+fun GridRow(
+    modifier: Modifier = Modifier,
+    gap: Dp = Space.sm,
+    content: @Composable RowScope.() -> Unit
+) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap), content = content)
+}
+
+/** 栅格中的单个格子，等宽。必须在 [GridRow] 的 RowScope 内调用。 */
+@Composable
+fun RowScope.GridCell(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+    Box(modifier.weight(1f), contentAlignment = Alignment.Center, content = content)
+}
+
+/**
+ * 列表项：左侧图标 + 中间主副两行 + 右侧操作。
+ *
+ * 这是全站列表的统一骨架。之前每个页面各写一套 Row，导致图标大小、间距、
+ * 文字基线全都不一致 —— 视觉上「东一块西一块」。
+ */
+@Composable
+fun ListRow(
+    icon: ImageVector,
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    iconSize: Dp = 38.dp,
+    subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    trailing: (@Composable () -> Unit)? = null,
+    onClick: (() -> Unit)? = null
+) {
+    val row = @Composable {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = Space.sm),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconBadge(icon = icon, tint = iconTint, size = iconSize)
+            Spacer(Modifier.width(Space.md))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (subtitle != null) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = subtitleColor,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            if (trailing != null) {
+                Spacer(Modifier.width(Space.sm))
+                trailing()
+            }
+        }
+    }
+    if (onClick != null) {
+        Box(
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = onClick)
+        ) { row() }
+    } else {
+        Box(modifier.fillMaxWidth()) { row() }
+    }
+}
+
+/**
+ * 紧凑导航行：分组卡片内部的二级入口。
+ *
+ * 与 [ListRow] 的区别是图标更小（30dp）、垂直内边距更小，
+ * 这样一组 8 个入口能收进一张卡片里，页面不会拉得过长。
+ */
+@Composable
+fun CompactNavRow(
+    icon: ImageVector,
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    onClick: (() -> Unit)? = null
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(vertical = Space.md),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconBadge(icon = icon, tint = iconTint, size = 30.dp, corner = 9.dp)
+        Spacer(Modifier.width(Space.md))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (subtitle != null) {
+                Spacer(Modifier.height(1.dp))
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Icon(
+            Icons.Filled.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.outlineVariant,
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+/** 圆角图标底板：全站统一尺寸与圆角，列表/卡片/入口共用。 */
+@Composable
+fun IconBadge(
+    icon: ImageVector,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    size: Dp = 40.dp,
+    corner: Dp = 11.dp
+) {
+    Box(
+        modifier
+            .size(size)
+            .clip(RoundedCornerShape(corner))
+            .background(tint.copy(alpha = 0.12f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(size * 0.46f))
+    }
+}
+
 /* ══════════════════ 数据展示 ══════════════════ */
 
-/** 键值行：等宽标签列（140dp），值列自适应。 */
+/**
+ * 键值行：标签列与值列宽度按比例分配。
+ *
+ * 用 [weight] 而不是固定 dp 宽度：这样不同页面的 DataRow 在任何屏幕宽度下
+ * 标签列占比都一致，长短不一的卡片之间也能对齐。此前写死 132.dp，
+ * 在窄屏上会把值挤成两三行。
+ */
 @Composable
 fun DataRow(
     label: String,
@@ -119,13 +328,14 @@ fun DataRow(
             label,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(132.dp)
+            modifier = Modifier.weight(0.38f)
         )
+        Spacer(Modifier.width(Space.sm))
         Text(
             value.ifBlank { "-" },
             style = MaterialTheme.typography.bodyMedium,
             color = valueColor,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(0.62f)
         )
     }
 }
@@ -142,8 +352,7 @@ fun DataRowDivider(label: String, value: String, modifier: Modifier = Modifier) 
     }
 }
 
-/** 状态标签：圆角胶囊，success/danger/warning/info/neutral。 */
-@Composable
+/** 状态标签：圆角胶囊，success/danger/warning/info/neutral。 */@Composable
 fun StatusChip(
     text: String,
     tone: ChipTone = ChipTone.NEUTRAL,
@@ -168,11 +377,61 @@ fun StatusChip(
 
 enum class ChipTone { SUCCESS, DANGER, WARNING, INFO, NEUTRAL }
 
+/**
+ * 图表下方的三段式轴标签：左 / 中 / 右。
+ *
+ * 之前用 `Spacer(weight(1f))` 在两段文字之间撑开，导致中间那段并没有落在
+ * 真正的几何中心 —— 左边文字越长，中间标签就越往右偏，视觉上「不对称」。
+ * 这里改用固定比例：左右各占 1，中间占 2 且居中，保证中段永远在正中。
+ */
+@Composable
+fun AxisLabels(
+    left: String,
+    right: String,
+    modifier: Modifier = Modifier,
+    center: String? = null
+) {
+    val style = MaterialTheme.typography.labelSmall
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            left,
+            style = style,
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        if (center != null) {
+            Text(
+                center,
+                style = style,
+                color = color,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(2f)
+            )
+        } else {
+            Spacer(Modifier.weight(2f))
+        }
+        Text(
+            right,
+            style = style,
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
 /* ══════════════════ KPI 指标卡 ══════════════════ */
 
 /**
- * 指标卡：图标 + 指标名 + 大数值 + 可选副文本/趋势。
- * 用于概览页顶部 2x2 网格。
+ * 指标卡：图标 + 指标名 + 大数值 + 可选副文本。
+ * 用于概览页与各页的 2x2 栅格。
  */
 @Composable
 fun MetricCard(
@@ -185,23 +444,15 @@ fun MetricCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
+        shape = CardShape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = CardBorder(),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(Modifier.padding(Space.md)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(accent.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(icon, null, tint = accent, modifier = Modifier.size(16.dp))
-                }
-                Spacer(Modifier.width(Space.sm))
+                IconBadge(icon = icon, tint = accent, size = 26.dp, corner = 8.dp)
+                Spacer(Modifier.width(Space.sm + 2.dp))
                 Text(
                     label,
                     style = MaterialTheme.typography.bodySmall,
@@ -210,7 +461,7 @@ fun MetricCard(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Spacer(Modifier.height(Space.sm))
+            Spacer(Modifier.height(Space.md))
             Text(
                 value,
                 style = MaterialTheme.typography.headlineSmall,
@@ -219,7 +470,7 @@ fun MetricCard(
                 overflow = TextOverflow.Ellipsis
             )
             if (hint != null) {
-                Spacer(Modifier.height(2.dp))
+                Spacer(Modifier.height(3.dp))
                 Text(
                     hint,
                     style = MaterialTheme.typography.labelSmall,

@@ -128,19 +128,13 @@ fun IpGroupScreen() {
                 val isOpen = expanded == name
                 WafCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Filled.Folder, null,
+                            IconBadge(
+                                icon = Icons.Filled.Folder,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
+
+                                size = 36.dp,
+                                corner = 10.dp
                             )
-                        }
                         Spacer(Modifier.width(Space.md))
                         Column(Modifier.weight(1f)) {
                             Text(

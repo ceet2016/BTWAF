@@ -148,7 +148,7 @@ private fun ReportOverview(
         verticalArrangement = Arrangement.spacedBy(Space.md)
     ) {
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            GridRow {
                 MetricCard(
                     Icons.Filled.Public, "攻击来源", formatNumber(vm.ipTop.size.toLong()),
                     accent = MaterialTheme.colorScheme.primary,
@@ -162,7 +162,7 @@ private fun ReportOverview(
             }
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            GridRow {
                 MetricCard(
                     Icons.Filled.GppBad, "攻击总量", formatNumber(total),
                     hint = "近 30 日", accent = MaterialTheme.colorScheme.error,
@@ -261,31 +261,46 @@ private fun ReportIpList(vm: ReportViewModel, onUnblock: (Map<String, Any?>) -> 
         contentPadding = PaddingValues(Space.lg),
         verticalArrangement = Arrangement.spacedBy(Space.sm)
     ) {
-        items(vm.ipList) { row ->
-            WafCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            row.s("ip"),
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis
+        item {
+            WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.xs)) {
+                vm.ipList.forEachIndexed { i, row ->
+                    if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = Space.md),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconBadge(
+                            icon = Icons.Filled.Public,
+                            tint = MaterialTheme.colorScheme.primary,
+                            size = 34.dp,
+                            corner = 9.dp
                         )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            listOf(row.s("ip_country"), row.s("ip_province"), row.s("ip_city"))
-                                .filter { it.isNotBlank() }.joinToString(" "),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-                            StatusChip("${row.l("visits")} 次", ChipTone.DANGER)
-                            if (row.s("risk_type").isNotBlank()) {
-                                StatusChip(row.s("risk_type"), ChipTone.WARNING)
+                        Spacer(Modifier.width(Space.md))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                row.s("ip"),
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                listOf(row.s("ip_country"), row.s("ip_province"), row.s("ip_city"))
+                                    .filter { it.isNotBlank() }.joinToString(" "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(Modifier.height(Space.xs))
+                            Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                                StatusChip("${row.l("visits")} 次", ChipTone.DANGER)
+                                if (row.s("risk_type").isNotBlank()) {
+                                    StatusChip(row.s("risk_type"), ChipTone.WARNING)
+                                }
                             }
                         }
+                        Spacer(Modifier.width(Space.sm))
+                        SmallButton("解封", tone = ChipTone.WARNING) { onUnblock(row) }
                     }
-                    SmallButton("解封", tone = ChipTone.WARNING) { onUnblock(row) }
                 }
             }
         }
@@ -302,36 +317,17 @@ private fun ReportUriList(vm: ReportViewModel) {
         contentPadding = PaddingValues(Space.lg),
         verticalArrangement = Arrangement.spacedBy(Space.sm)
     ) {
-        items(vm.uriTop) { row ->
-            WafCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(34.dp)
-                            .clip(RoundedCornerShape(9.dp))
-                            .background(MaterialTheme.colorScheme.tertiaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Filled.Link, null,
-                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.size(17.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(Space.md))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            row.s("uri"),
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 2, overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            "命中 ${row.l("uri_total")} 次",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+        item {
+            WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.xs)) {
+                vm.uriTop.forEachIndexed { i, row ->
+                    if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    ListRow(
+                        icon = Icons.Filled.Link,
+                        title = row.s("uri").ifBlank { "/" },
+                        subtitle = "命中 ${row.l("uri_total")} 次",
+                        iconTint = MaterialTheme.colorScheme.tertiary,
+                        iconSize = 34.dp
+                    )
                 }
             }
         }
@@ -351,35 +347,48 @@ private fun ReportRuleHit(vm: ReportViewModel) {
         contentPadding = PaddingValues(Space.lg),
         verticalArrangement = Arrangement.spacedBy(Space.sm)
     ) {
-        items(vm.ruleHit) { row ->
-            WafCard {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            row.s("rule_name").ifBlank { "(未命名规则)" },
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1, overflow = TextOverflow.Ellipsis
+        item {
+            WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.xs)) {
+                vm.ruleHit.forEachIndexed { i, row ->
+                    if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = Space.md),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconBadge(
+                            icon = Icons.Filled.Bolt,
+                            tint = if (row.s("status") == "命中") MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.primary,
+                            size = 34.dp,
+                            corner = 9.dp
                         )
+                        Spacer(Modifier.width(Space.md))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                row.s("rule_name").ifBlank { "(未命名规则)" },
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "${row.s("server_name")} ${row.s("uri")}".trim(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                "IP ${row.s("ip")} ${row.s("ip_country")} · ${row.s("rule_type")}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(Modifier.width(Space.sm))
                         StatusChip(
-                            row.s("status"),
+                            row.s("status").ifBlank { "记录" },
                             if (row.s("status") == "命中") ChipTone.DANGER else ChipTone.INFO
                         )
                     }
-                    Spacer(Modifier.height(Space.xs))
-                    Text(
-                        "${row.s("server_name")} ${row.s("uri")}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        "IP ${row.s("ip")} ${row.s("ip_country")} · ${row.s("rule_type")} · ${row.l("timestimp")}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
-                    )
                 }
             }
         }

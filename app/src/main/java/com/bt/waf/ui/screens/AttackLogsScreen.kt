@@ -78,7 +78,7 @@ fun LogCenterScreen(onOpen: (String) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(Space.md)
         ) {
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                GridRow {
                     MetricCard(
                         Icons.Filled.GppBad, "今日拦截", formatNumber(vm.todayCount.toLong()),
                         accent = MaterialTheme.colorScheme.error,
@@ -96,35 +96,27 @@ fun LogCenterScreen(onOpen: (String) -> Unit) {
                 SectionHeader("日志分类", subtitle = "点击进入对应日志")
             }
 
-            items(LOG_ENTRIES) { e ->
-                WafCard(onClick = { onOpen(e.route) }) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier
-                                .size(38.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(e.tint.copy(alpha = 0.12f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                e.icon, null,
-                                tint = e.tint,
-                                modifier = Modifier.size(19.dp)
-                            )
+            // 同组入口收进一张卡片：组内条目间距 2dp，组间 12dp，
+            // 视觉上是「一块分类区」而不是「一摞散卡」。
+            item {
+                WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.xs)) {
+                    LOG_ENTRIES.forEachIndexed { i, e ->
+                        if (i > 0) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         }
-                        Spacer(Modifier.width(Space.md))
-                        Column(Modifier.weight(1f)) {
-                            Text(e.title, style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                e.desc,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            Icons.Filled.ChevronRight, null,
-                            tint = MaterialTheme.colorScheme.outline,
-                            modifier = Modifier.size(20.dp)
+                        ListRow(
+                            icon = e.icon,
+                            title = e.title,
+                            subtitle = e.desc,
+                            iconTint = e.tint,
+                            onClick = { onOpen(e.route) },
+                            trailing = {
+                                Icon(
+                                    Icons.Filled.ChevronRight, null,
+                                    tint = MaterialTheme.colorScheme.outlineVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         )
                     }
                 }
@@ -256,7 +248,7 @@ private fun LogRow(
             .clickable { onClick() }
             .padding(vertical = Space.sm)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Text(
                     ip.ifBlank { "未知 IP" },
@@ -271,19 +263,23 @@ private fun LogRow(
                 )
             }
             Spacer(Modifier.width(Space.sm))
-            Column(horizontalAlignment = Alignment.End) {
+            Column(
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.widthIn(min = 68.dp)
+            ) {
                 StatusChip(actionText, tone)
                 if (ts > 0) {
                     Spacer(Modifier.height(3.dp))
                     Text(
                         formatTime(ts * 1000),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline
+                        color = MaterialTheme.colorScheme.outline,
+                        maxLines = 1
                     )
                 }
             }
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(5.dp))
         Text(
             listOf(uri, risk, rule).filter { it.isNotBlank() }.joinToString("  ·  ").ifBlank { "—" },
             style = MaterialTheme.typography.labelSmall,

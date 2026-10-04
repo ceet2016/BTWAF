@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bt.waf.WafApplication
@@ -204,42 +205,46 @@ fun SettingsScreen() {
             item { SectionHeader("可修改项", subtitle = "${items.size} 项") }
 
             items(items, key = { it.panel.name + it.title }) { it ->
-                WafCard(onClick = { open(it.panel) }) {
+                WafCard(
+                    onClick = { open(it.panel) },
+                    contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.md)
+                ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(it.tint.copy(alpha = 0.12f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(it.icon, null, tint = it.tint, modifier = Modifier.size(18.dp))
-                        }
+                        IconBadge(icon = it.icon, tint = it.tint, size = 36.dp, corner = 10.dp)
                         Spacer(Modifier.width(Space.md))
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(it.title, style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    it.title,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
                                 if (it.dangerous) {
                                     Spacer(Modifier.width(Space.sm))
                                     StatusChip("高危", ChipTone.DANGER)
                                 }
                             }
+                            Spacer(Modifier.height(1.dp))
                             Text(
                                 it.desc,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
-                            Spacer(Modifier.height(3.dp))
+                            Spacer(Modifier.height(Space.xs))
                             Text(
-                                it.value,
+                                it.value.ifBlank { "未设置" },
                                 style = MaterialTheme.typography.labelMedium,
                                 color = it.tint,
-                                maxLines = 1
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
+                        Spacer(Modifier.width(Space.sm))
                         Icon(
                             Icons.Filled.ChevronRight, null,
-                            tint = MaterialTheme.colorScheme.outline,
+                            tint = MaterialTheme.colorScheme.outlineVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }

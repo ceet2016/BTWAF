@@ -10,3 +10,6 @@
 app/build
 keystore.properties
 keystore/
+
+# 真机调试截图（临时产物，不入库）
+/shots/

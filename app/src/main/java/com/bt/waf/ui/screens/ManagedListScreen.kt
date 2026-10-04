@@ -217,48 +217,47 @@ fun ManagedListScreen(config: ListConfig) {
                         ),
                         verticalArrangement = Arrangement.spacedBy(Space.sm)
                     ) {
-                        items(vm.items.size) { idx ->
-                            val item = vm.items[idx]
-                            val title = pickString(item, *config.titleKeys.toTypedArray())
-                            val sub = pickString(item, *config.subtitleKeys.toTypedArray())
-                            val on = item[config.toggleStateKey].toBoolState()
-                            WafCard {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            title.ifBlank { "(无标题)" },
-                                            style = MaterialTheme.typography.titleSmall,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        if (sub.isNotBlank()) {
-                                            Spacer(Modifier.height(2.dp))
-                                            Text(
-                                                sub,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                        if (config.togglePath != null) {
-                                            Spacer(Modifier.height(Space.xs))
-                                            StatusChip(
-                                                if (on) "已启用" else "已停用",
-                                                if (on) ChipTone.SUCCESS else ChipTone.NEUTRAL
-                                            )
-                                        }
+                        item {
+                            WafCard(
+                                contentPadding = PaddingValues(
+                                    horizontal = Space.md, vertical = Space.xs
+                                )
+                            ) {
+                                vm.items.forEachIndexed { idx, item ->
+                                    if (idx > 0) {
+                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                     }
-                                    RowActions(
-                                        config = config,
-                                        enabled = on,
-                                        onToggle = if (config.togglePath != null) {
-                                            { vm.toggle(idx) { e -> if (e != null) vm.error = e } }
-                                        } else null,
-                                        onDelete = if (config.deletePath != null) {
-                                            { deleteIndex = idx }
-                                        } else null,
-                                        onDetail = { detailItem = item }
+                                    val title = pickString(item, *config.titleKeys.toTypedArray())
+                                    val sub = pickString(item, *config.subtitleKeys.toTypedArray())
+                                    val on = item[config.toggleStateKey].toBoolState()
+                                    ListRow(
+                                        icon = config.icon,
+                                        title = title.ifBlank { "(无标题)" },
+                                        subtitle = sub.ifBlank {
+                                            if (config.togglePath != null) {
+                                                if (on) "已启用" else "已停用"
+                                            } else null
+                                        },
+                                        iconTint = if (on) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.outline
+                                        },
+                                        iconSize = 34.dp,
+                                        trailing = {
+                                            RowActions(
+                                                config = config,
+                                                enabled = on,
+                                                onToggle = if (config.togglePath != null) {
+                                                    { vm.toggle(idx) { e -> if (e != null) vm.error = e } }
+                                                } else null,
+                                                onDelete = if (config.deletePath != null) {
+                                                    { deleteIndex = idx }
+                                                } else null,
+                                                onDetail = { detailItem = item }
+                                            )
+                                        },
+                                        onClick = { detailItem = item }
                                     )
                                 }
                             }

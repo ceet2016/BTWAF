@@ -169,16 +169,9 @@ fun RulesScreen() {
             verticalArrangement = Arrangement.spacedBy(Space.md)
         ) {
             item {
-                Text(
+                SectionHeader(
                     "防护规则总览",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    "集中管理 CC 防护、运行模式与云端情报库",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    subtitle = "集中管理 CC 防护、运行模式与云端情报库"
                 )
             }
 
@@ -224,31 +217,18 @@ fun RulesScreen() {
                     val isOpen = expanded == a.path + a.label
                     val busy = running == a.path
                     WafCard {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    Modifier
-                                        .size(36.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(a.tint.copy(alpha = 0.12f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                Icon(a.icon, null, tint = a.tint, modifier = Modifier.size(18.dp))
+                        ListRow(
+                            icon = a.icon,
+                            title = a.label,
+                            subtitle = a.note,
+                            iconTint = a.tint,
+                            iconSize = 36.dp,
+                            trailing = {
+                                if (a.dangerous) {
+                                    StatusChip("危险", ChipTone.DANGER)
+                                }
                             }
-                            Spacer(Modifier.width(Space.md))
-                            Column(Modifier.weight(1f)) {
-                                Text(a.label, style = MaterialTheme.typography.titleSmall)
-                                Text(
-                                    a.note,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            if (a.dangerous) {
-                                StatusChip("危险", ChipTone.DANGER)
-                            }
-                        }
+                        )
 
                         Spacer(Modifier.height(Space.md))
 

@@ -85,34 +85,17 @@ fun SystemHomeScreen(onOpen: (String) -> Unit) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(Space.lg),
-        verticalArrangement = Arrangement.spacedBy(Space.lg)
+        verticalArrangement = Arrangement.spacedBy(Space.md)
     ) {
         item {
-            WafCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(11.dp))
-                            .background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Filled.Settings, null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(21.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(Space.md))
-                    Column(Modifier.weight(1f)) {
-                        Text("系统管理", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "策略、证书、用户与运维",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+            WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.sm)) {
+                ListRow(
+                    icon = Icons.Filled.Settings,
+                    title = "系统管理",
+                    subtitle = "策略、证书、用户与运维",
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    iconSize = 40.dp
+                )
             }
         }
 
@@ -120,41 +103,19 @@ fun SystemHomeScreen(onOpen: (String) -> Unit) {
             item(key = "h_${group.title}") {
                 SectionHeader(group.title, subtitle = "${group.entries.size} 项")
             }
-            items(group.entries) { entry ->
-                WafCard(onClick = { onOpen(entry.route) }) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier
-                                .size(34.dp)
-                                .clip(RoundedCornerShape(9.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                entry.icon, null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
+            item(key = "g_${group.title}") {
+                // 同一分组的入口收进一张卡片：分组之间留白 16dp，
+                // 组内条目间距 2dp，视觉上「一组一块」而不是「一堆散卡」。
+                WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.xs)) {
+                    group.entries.forEachIndexed { i, entry ->
+                        if (i > 0) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         }
-                        Spacer(Modifier.width(Space.md))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                entry.title,
-                                style = MaterialTheme.typography.titleSmall,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(Modifier.height(1.dp))
-                            Text(
-                                entry.desc,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2, overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Icon(
-                            Icons.Filled.ChevronRight, null,
-                            tint = MaterialTheme.colorScheme.outline,
-                            modifier = Modifier.size(20.dp)
+                        CompactNavRow(
+                            icon = entry.icon,
+                            title = entry.title,
+                            subtitle = entry.desc,
+                            onClick = { onOpen(entry.route) }
                         )
                     }
                 }

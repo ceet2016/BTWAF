@@ -1,5 +1,10 @@
 package com.bt.waf.ui.model
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ListAlt
+import androidx.compose.ui.graphics.vector.ImageVector
+
 /**
  * 通用“受管列表”配置：用一个界面 + 一个 ViewModel 覆盖大量后台模块。
  *
@@ -20,6 +25,8 @@ data class ListConfig(
     val key: String,
     val title: String,
     val listPath: String,
+    /** 列表项图标，全站统一由 ListRow 渲染 */
+    val icon: ImageVector = Icons.Filled.ListAlt,
     val listParams: Map<String, Any?> = mapOf("p" to 1, "p_size" to 50),
     val titleKeys: List<String> = listOf(
         "site_name", "name", "ip", "url", "ua", "rule", "domain", "ps", "data", "id"
@@ -82,6 +89,7 @@ object ManagedLists {
     private fun ipConfig(key: String, title: String, types: Int) = ListConfig(
         key = key,
         title = title,
+        icon = if (types == 1) Icons.Filled.CheckCircle else Icons.Filled.Block,
         listPath = "limit/get_ip",
         listParams = mapOf("p" to 1, "p_size" to 50, "types" to types, "keyword" to ""),
         titleKeys = listOf("start", "notes", "index"),
@@ -106,6 +114,7 @@ object ManagedLists {
     private fun urlConfig(key: String, title: String, types: Int) = ListConfig(
         key = key,
         title = title,
+        icon = Icons.Filled.Link,
         listPath = "limit/get_url",
         listParams = mapOf("p" to 1, "p_size" to 50, "types" to types, "keyword" to ""),
         titleKeys = listOf("url", "notes", "index"),
@@ -130,6 +139,7 @@ object ManagedLists {
     private fun uaConfig(key: String, title: String, types: Int) = ListConfig(
         key = key,
         title = title,
+        icon = Icons.Filled.Fingerprint,
         listPath = "limit/get_ua",
         listParams = mapOf("p" to 1, "p_size" to 50, "types" to types, "keyword" to ""),
         titleKeys = listOf("data", "notes", "index"),
@@ -155,6 +165,7 @@ object ManagedLists {
         key = "exclusive",
         title = "专属规则（例外放行）",
         listPath = "exclusive/get_list",
+        icon = Icons.Filled.OpenInNew,
         listParams = mapOf("p" to 1, "p_size" to 50, "keyword" to ""),
         rootArrayResponse = false,
         idFromPosition = true,
@@ -180,6 +191,7 @@ object ManagedLists {
         key = "customize",
         title = "自定义防护规则",
         listPath = "customize/list",
+        icon = Icons.Filled.Rule,
         listParams = mapOf("p" to 1, "p_size" to 50, "keyword" to "", "type" to 0),
         titleKeys = listOf("name", "root", "id"),
         subtitleKeys = listOf("status", "priority", "create_time", "execute_phase", "action"),
@@ -202,6 +214,7 @@ object ManagedLists {
         key = "speed",
         title = "访问限速",
         listPath = "speed/get_list",
+        icon = Icons.Filled.Speed,
         listParams = mapOf("p" to 1, "p_size" to 50),
         titleKeys = listOf("site_name", "domain", "site_id"),
         subtitleKeys = listOf("open", "expire", "size", "site_id"),
@@ -223,6 +236,7 @@ object ManagedLists {
         key = "manm",
         title = "人机验证",
         listPath = "manm/get_list",
+        icon = Icons.Filled.SmartToy,
         listParams = mapOf("p" to 1, "p_size" to 50),
         titleKeys = listOf("ps", "auth_type", "key"),
         subtitleKeys = listOf("open", "key", "auth_type"),
@@ -245,6 +259,7 @@ object ManagedLists {
         key = "regional",
         title = "区域拦截",
         listPath = "wafrules/get_regional_restrictions_rules",
+        icon = Icons.Filled.Public,
         listParams = mapOf("p" to 1, "p_size" to 50, "searchStr" to ""),
         titleKeys = listOf("region", "label", "name", "id"),
         subtitleKeys = listOf("status", "site_id", "id", "type"),
@@ -265,6 +280,7 @@ object ManagedLists {
         key = "http_header_len",
         title = "HTTP 头长度限制",
         listPath = "wafrules/get_http_header_len_rules",
+        icon = Icons.Filled.Compress,
         listParams = mapOf("p" to 1, "p_size" to 50),
         titleKeys = listOf("site_name", "site_id", "id"),
         subtitleKeys = listOf("open", "header_len", "id"),
@@ -288,6 +304,7 @@ object ManagedLists {
         key = "user_limit",
         title = "单 IP 访问限制",
         listPath = "wafrules/get_user_limit",
+        icon = Icons.Filled.PersonOutline,
         listParams = mapOf("p" to 1, "p_size" to 50),
         titleKeys = listOf("site_name", "site_id", "id"),
         subtitleKeys = listOf("open", "max_req", "time", "id"),
@@ -309,6 +326,7 @@ object ManagedLists {
         key = "spider",
         title = "搜索引擎爬虫",
         listPath = "wafrules/get_spider_rules",
+        icon = Icons.Filled.TravelExplore,
         listParams = mapOf("p" to 1, "p_size" to 50),
         titleKeys = listOf("name", "rule_log", "id"),
         subtitleKeys = listOf("open", "id"),
@@ -322,6 +340,7 @@ object ManagedLists {
         key = "http_method",
         title = "HTTP 请求方法限制",
         listPath = "wafrules/get_http_method_type_rules",
+        icon = Icons.Filled.SwapHoriz,
         listParams = mapOf("p" to 1, "p_size" to 50),
         titleKeys = listOf("site_name", "site_id", "id"),
         subtitleKeys = listOf("open", "method", "id"),
@@ -335,6 +354,7 @@ object ManagedLists {
         key = "opt_logs",
         title = "操作日志",
         listPath = "opt_log/list",
+        icon = Icons.Filled.History,
         listParams = mapOf("p" to 1, "p_size" to 50),
         titleKeys = listOf("content", "operator", "log_type", "id"),
         subtitleKeys = listOf("create_time", "uid", "id"),
@@ -345,6 +365,7 @@ object ManagedLists {
         key = "cc_events",
         title = "CC 攻击事件",
         listPath = "report/cc_list",
+        icon = Icons.Filled.Bolt,
         listParams = mapOf("p" to 1, "p_size" to 50, "keyword" to "", "query_data" to ""),
         titleKeys = listOf("servername", "server_name", "id"),
         subtitleKeys = listOf("uri", "host", "create_time", "id"),
@@ -358,6 +379,7 @@ object ManagedLists {
         key = "ip_block_log",
         title = "IP 封禁记录",
         listPath = "report/attack_report_ip_log",
+        icon = Icons.Filled.Lock,
         listParams = mapOf("p" to 1, "p_size" to 50, "keyword" to "", "query_data" to ""),
         titleKeys = listOf("ip", "id"),
         subtitleKeys = listOf("server_name", "ip_country", "ip_city", "risk_type", "time"),

@@ -348,7 +348,16 @@ fun SitesScreen() {
     }
 }
 
-/** 站点卡片：域名 + 状态 + 端口 + 菜单。 */
+/**
+ * 站点卡片。
+ *
+ * 之前把「域名 + 状态标签 + site_id」三样东西硬塞在同一行，左边文字越长右边
+ * 越挤，看起来就是「左重右轻」。现在改成统一骨架：
+ *   左：图标底板（颜色即状态）
+ *   中：域名做主标题，状态与端口降级成一行副信息
+ *   右：开关 + 更多菜单
+ * site_id 属于技术字段，移到详情里展示，列表不再出现。
+ */
 @Composable
 private fun SiteCard(
     site: Map<String, Any?>,
@@ -359,92 +368,66 @@ private fun SiteCard(
     val name = pickString(site, "site_name", "name", "domain", "id").ifBlank { "(未命名站点)" }
     val status = site["status"].asString()
     val on = status == "1" || status.equals("true", true)
+    val tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+    val port = site["port"].asString()
+    val sub = listOf(if (on) "防护中" else "已停用", if (port.isNotBlank()) "端口 $port" else "")
+        .filter { it.isNotBlank() }
+        .joinToString(" · ")
     var menu by remember { mutableStateOf(false) }
 
-    WafCard(onClick = onDetail) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        (if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
-                            .copy(alpha = 0.12f)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    if (on) Icons.Filled.Shield else Icons.Filled.ShieldMoon,
-                    null,
-                    tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.size(19.dp)
-                )
-            }
-            Spacer(Modifier.width(Space.md))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    name,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(3.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatusChip(
-                        if (on) "防护中" else "已停用",
-                        if (on) ChipTone.SUCCESS else ChipTone.NEUTRAL
-                    )
-                    val extra = listOf(
-                        site["port"].asString().let { if (it.isNotBlank()) "端口 $it" else "" },
-                        site["site_id"].asString()
-                    ).filter { it.isNotBlank() }.joinToString(" · ")
-                    if (extra.isNotBlank()) {
-                        Spacer(Modifier.width(Space.sm))
-                        Text(
-                            extra,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+    WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.sm)) {
+        ListRow(
+            icon = if (on) Icons.Filled.Shield else Icons.Filled.ShieldMoon,
+            title = name,
+            subtitle = sub,
+            iconTint = tint,
+            subtitleColor = if (on) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            onClick = onDetail,
+            trailing = {
+                Switch(checked = on, onCheckedChange = onToggle)
+                Spacer(Modifier.width(Space.xs))
+                Box {
+                    IconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            Icons.Filled.MoreVert,
+                            "更多",
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("查看详情") },
+                            leadingIcon = { Icon(Icons.Filled.Info, null, Modifier.size(18.dp)) },
+                            onClick = { menu = false; onDetail() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (on) "停用防护" else "启用防护") },
+                            leadingIcon = {
+                                Icon(
+                                    if (on) Icons.Filled.PauseCircle else Icons.Filled.PlayCircle,
+                                    null, Modifier.size(18.dp)
+                                )
+                            },
+                            onClick = { menu = false; onToggle(!on) }
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("删除", color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Filled.Delete, null,
+                                    Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            },
+                            onClick = { menu = false; onDelete() }
                         )
                     }
                 }
             }
-            Switch(checked = on, onCheckedChange = onToggle)
-            Box {
-                IconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.MoreVert, "更多", modifier = Modifier.size(20.dp))
-                }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(
-                        text = { Text("查看详情") },
-                        leadingIcon = { Icon(Icons.Filled.Info, null, Modifier.size(18.dp)) },
-                        onClick = { menu = false; onDetail() }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(if (on) "停用防护" else "启用防护") },
-                        leadingIcon = {
-                            Icon(
-                                if (on) Icons.Filled.PauseCircle else Icons.Filled.PlayCircle,
-                                null, Modifier.size(18.dp)
-                            )
-                        },
-                        onClick = { menu = false; onToggle(!on) }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("删除", color = MaterialTheme.colorScheme.error) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Filled.Delete, null,
-                                Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                        },
-                        onClick = { menu = false; onDelete() }
-                    )
-                }
-            }
-        }
+        )
     }
 }
 

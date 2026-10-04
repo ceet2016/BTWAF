@@ -196,17 +196,12 @@ fun ProfileScreen() {
             item { SectionHeader("运维操作", subtitle = "${actions.size} 项") }
 
             items2(actions) { a ->
-                WafCard(onClick = { if (!busy) a.action() }) {
+                WafCard(
+                    onClick = { if (!busy) a.action() },
+                    contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.md)
+                ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(a.tint.copy(alpha = 0.12f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(a.icon, null, tint = a.tint, modifier = Modifier.size(18.dp))
-                        }
+                                                IconBadge(icon = a.icon, tint = a.tint, size = 36.dp, corner = 10.dp)
                         Spacer(Modifier.width(Space.md))
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {

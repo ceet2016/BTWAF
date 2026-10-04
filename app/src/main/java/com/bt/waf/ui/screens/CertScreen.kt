@@ -103,19 +103,13 @@ fun CertScreen() {
                         WafCard {
                             Column {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        Modifier
-                                            .size(36.dp)
-                                            .clip(RoundedCornerShape(9.dp))
-                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            Icons.Filled.Lock, null,
+                                        IconBadge(
+                                            icon = Icons.Filled.Lock,
                                             tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(18.dp)
+
+                                            size = 36.dp,
+                                            corner = 9.dp
                                         )
-                                    }
                                     Spacer(Modifier.width(Space.md))
                                     Column(Modifier.weight(1f)) {
                                         Text(

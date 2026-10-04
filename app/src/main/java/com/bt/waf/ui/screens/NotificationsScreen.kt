@@ -139,17 +139,9 @@ fun NotificationsScreen() {
                     val configured = ch["is_configured"] == true
                     val cfg = ch["config"].asMap()
 
-                    WafCard {
+                    WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.md)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier
-                                    .size(38.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(meta.tint.copy(alpha = 0.12f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(meta.icon, null, tint = meta.tint, modifier = Modifier.size(19.dp))
-                            }
+                                                        IconBadge(icon = meta.icon, tint = meta.tint, size = 38.dp, corner = 11.dp)
                             Spacer(Modifier.width(Space.md))
                             Column(Modifier.weight(1f)) {
                                 Text(
