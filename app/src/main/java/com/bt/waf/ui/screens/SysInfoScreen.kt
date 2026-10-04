@@ -56,7 +56,7 @@ fun SysInfoScreen() {
             contentPadding = cardPadding,
             verticalArrangement = Arrangement.spacedBy(Space.md)
         ) {
-            item { ErrorBanner(vm.error) { vm.load() } }
+            item { ErrorBannerFlush(vm.error) { vm.load() } }
 
             item {
                 WafCard {

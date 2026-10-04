@@ -230,38 +230,34 @@ fun SitesScreen() {
                 }
                 Spacer(Modifier.height(Space.md))
 
-                ScrollableTabRow(
-                    selectedTabIndex = SiteTab.entries.indexOf(detailTab),
-                    edgePadding = 0.dp,
+                // 统一走 WafTabRow：edgePadding 与卡片内容左边距对齐，
+                // 选中项自动滚入视野（4 个标签时最后一个原本会被裁掉一半）。
+                // 懒加载逻辑保留在 onSelect 里。
+                WafTabRow(
+                    labels = SiteTab.entries.map { it.label },
+                    selectedIndex = SiteTab.entries.indexOf(detailTab),
+                    onSelect = { idx ->
+                        val t = SiteTab.entries[idx]
+                        detailTab = t
+                        if (t == SiteTab.LOG && siteLogs.isEmpty()) {
+                            tabLoading = true
+                            vm.getLog(siteId) { l, e ->
+                                siteLogs = l ?: emptyList()
+                                tabLoading = false
+                                if (e != null) vm.error = e
+                            }
+                        }
+                        if (t == SiteTab.SSL && siteSsl.isEmpty()) {
+                            tabLoading = true
+                            vm.getSsl { s, e ->
+                                siteSsl = s ?: emptyList()
+                                tabLoading = false
+                                if (e != null) vm.error = e
+                            }
+                        }
+                    },
                     containerColor = MaterialTheme.colorScheme.surface,
-                    divider = {}
-                ) {
-                    SiteTab.entries.forEach { t ->
-                        Tab(
-                            selected = detailTab == t,
-                            onClick = {
-                                detailTab = t
-                                if (t == SiteTab.LOG && siteLogs.isEmpty()) {
-                                    tabLoading = true
-                                    vm.getLog(siteId) { l, e ->
-                                        siteLogs = l ?: emptyList()
-                                        tabLoading = false
-                                        if (e != null) vm.error = e
-                                    }
-                                }
-                                if (t == SiteTab.SSL && siteSsl.isEmpty()) {
-                                    tabLoading = true
-                                    vm.getSsl { s, e ->
-                                        siteSsl = s ?: emptyList()
-                                        tabLoading = false
-                                        if (e != null) vm.error = e
-                                    }
-                                }
-                            },
-                            text = { Text(t.label, style = MaterialTheme.typography.labelLarge) }
-                        )
-                    }
-                }
+                )
 
                 Spacer(Modifier.height(Space.md))
                 LoadingBar(tabLoading)

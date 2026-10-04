@@ -5,6 +5,9 @@ import com.bt.waf.data.net.WafClient
 import com.bt.waf.data.store.AuthStore
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -27,6 +30,27 @@ class WafRepository(
     val wafClient: WafClient
 ) {
     private val gson = GsonBuilder().setLenient().create()
+
+    /** 串行化重登：多个页面同时发现 token 过期时，只发一次登录请求。 */
+    private val reloginMutex = Mutex()
+
+    /**
+     * 服务端已判定鉴权失效，需要用户重新登录。
+     *
+     * 刻意**不保存密码做静默重登** —— 明文存密码风险过高。
+     * 改为：本地判断 token 过期、或服务端返回鉴权错误时，把 needRelogin 置 true，
+     * 界面订阅它弹一次性登录框。用户登录成功后标志清掉，期间所有页面不再重复弹。
+     */
+    @Volatile
+    private var authExpired: Boolean = false
+
+    /** 界面订阅这个 StateFlow：变成 true 就弹重新登录框。 */
+    val needRelogin = MutableStateFlow(false)
+
+    fun acknowledgeReloginPrompt() {
+        authExpired = false
+        needRelogin.value = false
+    }
 
     /** 登录前应用连接信息（网页地址、信任自签）并重建客户端。 */
     fun applyConnection(webUrl: String, trustSelfSigned: Boolean) {
@@ -111,7 +135,13 @@ class WafRepository(
         if (res["two_auth"] == true) return Result.failure(Exception("该实例已开启两步验证，请先在网页端登录"))
         val token = res["token"] as? String
         if (token.isNullOrBlank()) return Result.failure(Exception("登录成功但未返回 token"))
-        authStore.token = token
+        // aawaf 登录响应带 ttl（秒，默认 7200）。必须一起存：
+        // 只存 token 的话前端无法在请求前判断过期，只能等服务端返回
+        // "Token is expired" —— 用户看到的是一句英文错误。
+        val ttl = (res["ttl"] as? Number)?.toLong()
+            ?: res["ttl"]?.toString()?.toDoubleOrNull()?.toLong()
+            ?: 7200L
+        authStore.saveToken(token, ttl)
         wafClient.reconfigure()
         return Result.success(Unit)
     }
@@ -126,9 +156,60 @@ class WafRepository(
     suspend fun call(path: String, params: Map<String, Any?> = emptyMap()): WafResponse =
         raw(path, params)
 
-    /** 通用调用：失败抛 [ApiException]，成功返回响应。 */
+    /**
+     * 是否是 token 过期 / 鉴权失败类错误。
+     *
+     * 这类错误可以靠重新登录恢复，与「站点不存在」「参数错误」有本质区别，
+     * 必须区分开：只有前者才值得自动重登一次。
+     */
+    private fun isAuthError(r: WafResponse): Boolean {
+        if (r.code == 0) return false
+        val text = (r.res as? String)?.lowercase() ?: return false
+        return text.contains("token") || text.contains("unauthorized") ||
+            text.contains("forbidden") || text.contains("not logged") ||
+            text.contains("login") || text.contains("会话") || text.contains("登录")
+    }
+
+    /**
+     * 标记 token 已失效，需要用户重新登录。
+     *
+     * aawaf 的 JWT ttl 默认 7200 秒（2 小时）。此前 App 只存 token 不存过期时间，
+     * 过期后服务端对所有 /api 请求返回 "Token is expired"，用户只能在
+     * 每个页面各点一次「重试」，而且重试也必然失败 —— 必须重新走登录流程。
+     *
+     * 两处触发：
+     *  1. 请求前本地判断（[AuthStore.isTokenExpired]）——提前 60 秒就知道，
+     *     这时候登录体验最顺（用户在操作别的页面，不会有明显中断）；
+     *  2. 服务端提前判定失效（比如服务端重启改了密钥），收到鉴权错误后触发。
+     *
+     * 用 [reloginMutex] 串行化：多个页面同时发现过期时只置一次标志，
+     * 界面也只弹一次登录框。
+     *
+     * @return true 表示已经置了标志（本轮应当中止请求并提示登录）
+     */
+    private suspend fun tryRelogin(): Boolean = reloginMutex.withLock {
+        if (authExpired) return@withLock true
+        authExpired = true
+        needRelogin.value = true
+        true
+    }
+
+    /** 通用调用：失败抛 [ApiException]，成功返回响应。内部含 token 过期处理。 */
     suspend fun safeCall(path: String, params: Map<String, Any?> = emptyMap()): WafResponse {
+        // 请求前本地判断：提前 60 秒就知道 token 要过期，
+        // 此时置标志让界面弹登录框，用户不用等请求失败才发现。
+        if (authStore.isTokenExpired() && tryRelogin()) {
+            throw ApiException("登录已过期，请重新登录", 401)
+        }
+
         val resp = raw(path, params)
+        if (resp.isSuccess) return resp
+
+        // 服务端判定鉴权失效（含ttl 比本地记的更短的情况）
+        if (isAuthError(resp) && tryRelogin()) {
+            throw ApiException("登录已过期，请重新登录", 401)
+        }
+
         if (!resp.isSuccess) throw ApiException(resp.errorMessage(), resp.code)
         return resp
     }

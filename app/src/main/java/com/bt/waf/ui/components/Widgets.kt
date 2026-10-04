@@ -6,6 +6,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -23,6 +26,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,6 +66,114 @@ val cardPadding: PaddingValues
 
 val rowCardPadding: PaddingValues
     @Composable get() = PaddingValues(horizontal = Space.md, vertical = Space.xs)
+
+/* ══════════════════ 页内标签栏标准 ══════════════════ */
+
+/**
+ * 页内分段标签栏（全站唯一定义）。
+ *
+ * 修掉的是用户点名的那个「不对称」：原来 7 个页面各自写
+ * `ScrollableTabRow(edgePadding = 0.dp)`，于是
+ *  - 第一个标签的文字从屏幕 x=0 开始，而它下方的卡片左边距是 44px
+ *    —— 标签和内容左边线差了 44px，一眼就能看出不齐；
+ *  - 选中指示器（那条蓝线）也跟着从 x=0 起画，视觉上像是「漏了一截」。
+ *
+ * ## 为什么不用 ScrollableTabRow
+ *
+ * 两个原因，都是实测踩出来的：
+ *  1. **它不保证选中项滚入视野**。标签多于 4 个时最后一个只露出一半
+ *     （实机「爬虫与蜘蛛」被裁成「爬虫与蜘」）。它内部有滚动状态但不对外
+ *     暴露，Compose BOM 2024.06.00 对应的 Material3 1.3.0 也没有
+ *     `scrollState` 参数（1.4 起改名 PrimaryScrollableTabRow 才开放）——
+ *     传了直接编译不过，别再试。
+ *  2. `edgePadding` 和指示器宽度要分别调，两处参数散落在 7 个调用点。
+ *
+ * 现在用 [LazyRow] + [LazyListState] 自己实现：
+ *  - 首尾各留 [Space.lg]，左边线与卡片内容严格对齐；
+ *  - 选中项变化时 `animateScrollToItem` 把它完整滚进视野；
+ *  - 蓝线宽度按标签文字估算，正好落在文字下方居中。
+ *
+ * @param labels 标签文本
+ * @param selectedIndex 当前选中下标
+ * @param onSelect 选中回调
+ * @param containerColor 底色，调用方按所在卡片层选择 surface 或 background
+ */
+@Composable
+fun WafTabRow(
+    labels: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surface,
+) {
+    val listState = rememberLazyListState()
+
+    // 选中项滚入视野 —— 这正是 ScrollableTabRow 做不到的那部分。
+    LaunchedEffect(selectedIndex) {
+        if (selectedIndex in labels.indices) {
+            // 负offset 把目标项推到起始位置，左侧留出已看过的标签作上下文。
+            val offset = -(labels.size * 40)
+            runCatching { listState.animateScrollToItem(selectedIndex, offset) }
+        }
+    }
+
+    Surface(modifier = modifier.fillMaxWidth(), color = containerColor) {
+        LazyRow(
+            state = listState,
+            // 关键：首尾内边距让第一个标签左边线== 卡片内容左边线
+            contentPadding = PaddingValues(horizontal = Space.lg),
+            horizontalArrangement = Arrangement.spacedBy(Space.lg),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            itemsIndexed(labels) { i, label ->
+                val selected = i == selectedIndex
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
+                        .clickable { onSelect(i) }
+                        .padding(horizontal = Space.xs, vertical = Space.sm),
+                ) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        // 长标签不折行，宁可被裁也不要撑破布局
+                        maxLines = 1,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    // 蓝线：宽度跟着标签走，正好在文字下方居中。
+                    // 未选中时宽度 0，视觉上就是「线只出现在当前标签下」。
+                    Box(
+                        Modifier
+                            .width(if (selected) tabIndicatorWidth(label) else 0.dp)
+                            .height(2.dp)
+                            .clip(RoundedCornerShape(1.dp))
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 蓝线宽度估算：中文按全角、其余按半角。
+ *
+ * 不必精确 —— 只要与标签文字视觉等宽即可。真正的字宽测量要
+ * `TextMeasurer`（实验 API）或 `onTextLayout` 回调，
+ * 不值得为一条 2dp 的装饰线引入。
+ */
+@Composable
+private fun tabIndicatorWidth(label: String): Dp {
+    val density = LocalDensity.current
+    val fontSize = MaterialTheme.typography.labelLarge.fontSize.value
+    val cjk = label.count { it.code in 0x4E00..0x9FFF }
+    val rest = label.length - cjk
+    val px = cjk * fontSize + rest * fontSize * 0.55f
+    return (px * density.density).dp
+}
 
 /**
  * 统一卡片。
@@ -733,9 +845,32 @@ fun EmptyState(
     }
 }
 
-/** 错误提示条（带重试）。 */
+/**
+ * 错误提示条（带重试）。
+ *
+ * 注意这里自己带水平内边距：调用点分布在裸 Column 与 LazyColumn 的 item 里，
+ * 它们的 contentPadding 各自不同（甚至没有）。如果 ErrorBanner 依赖调用方留白，
+ * 一旦某个页面忘了加，红色条就顶到屏幕左右边缘 —— 这正是用户说的「不对称」。
+ * 自己兜住留白，所有 20 个调用点一次性对称。
+ */
 @Composable
 fun ErrorBanner(msg: String?, modifier: Modifier = Modifier, onRetry: (() -> Unit)? = null) {
+    ErrorBannerImpl(msg, modifier.padding(horizontal = Space.lg), onRetry)
+}
+
+/**
+ * 错误提示条（不自带留白版）。
+ *
+ * 用于调用方已经在带 contentPadding 的LazyColumn 里、
+ * 或者本来就要求错误条通栏（如全屏对话框内部）的场景。
+ */
+@Composable
+fun ErrorBannerFlush(msg: String?, modifier: Modifier = Modifier, onRetry: (() -> Unit)? = null) {
+    ErrorBannerImpl(msg, modifier, onRetry)
+}
+
+@Composable
+private fun ErrorBannerImpl(msg: String?, modifier: Modifier, onRetry: (() -> Unit)?) {
     if (msg.isNullOrBlank()) return
     Surface(
         modifier.fillMaxWidth(),

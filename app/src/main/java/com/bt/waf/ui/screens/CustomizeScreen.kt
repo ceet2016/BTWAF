@@ -14,6 +14,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Rule
+import androidx.compose.material.icons.automirrored.filled.ListAlt
+import androidx.compose.material.icons.automirrored.filled.CallSplit
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -161,20 +164,12 @@ fun CustomizeScreen() {
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            ScrollableTabRow(
-                selectedTabIndex = CwTab.entries.indexOf(tab),
-                edgePadding = 0.dp,
+            WafTabRow(
+                labels = CwTab.entries.map { it.label },
+                selectedIndex = CwTab.entries.indexOf(tab),
+                onSelect = { idx -> tab = CwTab.entries[idx] },
                 containerColor = MaterialTheme.colorScheme.surface,
-                divider = {}
-            ) {
-                CwTab.entries.forEach { t ->
-                    Tab(
-                        selected = tab == t,
-                        onClick = { tab = t },
-                        text = { Text(t.label, style = MaterialTheme.typography.labelLarge) }
-                    )
-                }
-            }
+            )
 
             when (tab) {
                 CwTab.LIST -> CwListTab(
@@ -311,7 +306,7 @@ private fun CwListTab(
                 GridRow {
                     GridCell {
                         MetricCard(
-                            icon = Icons.Filled.Rule,
+                            icon = Icons.AutoMirrored.Filled.Rule,
                             label = "规则总数",
                             value = formatNumber(vm.total.toLong()),
                             hint = "当前筛选",
@@ -365,7 +360,7 @@ private fun CwListTab(
                 WafCard(contentPadding = rowCardPadding) {
                     if (vm.rules.isEmpty() && !vm.listLoading) {
                         EmptyState(
-                            icon = Icons.Filled.Rule,
+                            icon = Icons.AutoMirrored.Filled.Rule,
                             title = "还没有自定义规则",
                             description = "自定义规则可以按 IP、URI、请求头等条件精细匹配，命中后执行放行、拦截或重定向",
                             actionText = "新建第一条",
@@ -441,7 +436,7 @@ private fun CwRuleRow(
         "allow" -> Icons.Filled.CheckCircle
         "deny" -> Icons.Filled.Block
         "validate" -> Icons.Filled.SmartToy
-        "redirect" -> Icons.Filled.CallSplit
+        "redirect" -> Icons.AutoMirrored.Filled.CallSplit
         else -> Icons.Filled.Visibility
     }
 
@@ -613,7 +608,7 @@ private fun CwBlockLogTab(
                 item {
                     WafCard {
                         EmptyState(
-                            icon = Icons.Filled.ListAlt,
+                            icon = Icons.AutoMirrored.Filled.ListAlt,
                             title = "还没有可转换的日志",
                             description = "读取站点访问日志后，这里会列出可勾选的请求"
                         )

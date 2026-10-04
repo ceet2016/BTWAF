@@ -3,6 +3,9 @@ package com.bt.waf.ui.model
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.filled.ListAlt
+import androidx.compose.material.icons.automirrored.filled.ListAlt
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -26,7 +29,7 @@ data class ListConfig(
     val title: String,
     val listPath: String,
     /** 列表项图标，全站统一由 ListRow 渲染 */
-    val icon: ImageVector = Icons.Filled.ListAlt,
+    val icon: ImageVector = Icons.AutoMirrored.Filled.ListAlt,
     val listParams: Map<String, Any?> = mapOf("p" to 1, "p_size" to 50),
     val titleKeys: List<String> = listOf(
         "site_name", "name", "ip", "url", "ua", "rule", "domain", "ps", "data", "id"
@@ -165,7 +168,7 @@ object ManagedLists {
         key = "exclusive",
         title = "专属规则（例外放行）",
         listPath = "exclusive/get_list",
-        icon = Icons.Filled.OpenInNew,
+        icon = Icons.AutoMirrored.Filled.OpenInNew,
         listParams = mapOf("p" to 1, "p_size" to 50, "keyword" to ""),
         rootArrayResponse = false,
         idFromPosition = true,
@@ -191,7 +194,7 @@ object ManagedLists {
         key = "customize",
         title = "自定义防护规则",
         listPath = "customize/list",
-        icon = Icons.Filled.Rule,
+        icon = Icons.AutoMirrored.Filled.Rule,
         listParams = mapOf("p" to 1, "p_size" to 50, "keyword" to "", "type" to 0),
         titleKeys = listOf("name", "root", "id"),
         subtitleKeys = listOf("status", "priority", "create_time", "execute_phase", "action"),

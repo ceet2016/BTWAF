@@ -29,13 +29,50 @@ class AuthStore(context: Context) {
         get() = prefs.getString(KEY_TOKEN, "") ?: ""
         set(value) = prefs.edit().putString(KEY_TOKEN, value).apply()
 
+    /**
+     * token 的绝对过期时刻（毫秒）。
+     *
+     * aawaf 登录接口会返回 `ttl`（秒，默认 7200），但早期版本登录时只存了
+     * token 字符串，把 ttl 丢了 —— 结果前端完全不知道 token 什么时候过期，
+     * 过期后只能等服务端返回 "Token is expired" 才反应过来，界面上直接甩一句
+     * 英文给用户。这里把「收到 token 的时刻 + ttl」一起落盘，
+     * 配合 [isTokenExpired] / [tokenRemainingMinutes] 做本地判断。
+     */
+    var tokenExpireAt: Long
+        get() = prefs.getLong(KEY_TOKEN_EXPIRE, 0L)
+        set(value) = prefs.edit().putLong(KEY_TOKEN_EXPIRE, value).apply()
+
+    /** 登录成功后调用：同时保存 token 与它的过期时刻。 */
+    fun saveToken(token: String, ttlSeconds: Long) {
+        val now = System.currentTimeMillis()
+        prefs.edit()
+            .putString(KEY_TOKEN, token)
+            .putLong(KEY_TOKEN_EXPIRE, now + ttlSeconds * 1000L)
+            .apply()
+    }
+
+    /** 提前 60 秒就算过期，避免边界上发出一个必然失败的请求。 */
+    fun isTokenExpired(): Boolean {
+        val at = tokenExpireAt
+        if (at <= 0L) return false           // 老版本存的数据没有过期时间，不本地拦截
+        return System.currentTimeMillis() >= at - 60_000L
+    }
+
+    /** 剩余有效分钟数，未知时返回 -1。 */
+    fun tokenRemainingMinutes(): Int {
+        val at = tokenExpireAt
+        if (at <= 0L) return -1
+        val left = at - System.currentTimeMillis()
+        return if (left <= 0) 0 else (left / 60_000L).toInt()
+    }
+
     var trustSelfSigned: Boolean
         get() = prefs.getBoolean(KEY_TRUST, false)
         set(value) = prefs.edit().putBoolean(KEY_TRUST, value).apply()
 
     val hasSession: Boolean get() = token.isNotBlank() && webUrl.isNotBlank()
 
-    fun clearSession() = prefs.edit().remove(KEY_TOKEN).apply()
+    fun clearSession() = prefs.edit().remove(KEY_TOKEN).remove(KEY_TOKEN_EXPIRE).apply()
 
     fun clearAll() = prefs.edit().clear().apply()
 
@@ -74,6 +111,7 @@ class AuthStore(context: Context) {
         private const val KEY_WEB_URL = "web_url"
         private const val KEY_USER = "username"
         private const val KEY_TOKEN = "token"
+        private const val KEY_TOKEN_EXPIRE = "token_expire_at"
         private const val KEY_TRUST = "trust_self_signed"
     }
 }

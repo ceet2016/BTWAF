@@ -7,6 +7,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.CallSplit
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,7 +42,7 @@ private val SYS_GROUPS = listOf(
     SysGroup("防护策略", listOf(
         SysEntry("rules", "防护规则总览", "各防护模块的开关与运行模式", Icons.Filled.VerifiedUser),
         SysEntry("list/regional", "区域拦截", "按国家/地区封禁来访", Icons.Filled.Public),
-        SysEntry("list/exclusive", "专属规则", "对特定站点放宽验证", Icons.Filled.OpenInNew),
+        SysEntry("list/exclusive", "专属规则", "对特定站点放宽验证", Icons.AutoMirrored.Filled.OpenInNew),
         SysEntry("replace", "内容替换", "自动替换响应中的关键词", Icons.Filled.FindReplace),
         SysEntry("list/http_method", "HTTP 方法限制", "禁用危险请求方法", Icons.Filled.SwapHoriz),
         SysEntry("list/http_header_len", "请求头长度限制", "防御超长头部攻击", Icons.Filled.Compress),
@@ -58,11 +61,11 @@ private val SYS_GROUPS = listOf(
     SysGroup("访问控制", listOf(
         SysEntry("list/speed", "访问限速", "按站点限制带宽", Icons.Filled.Speed),
         SysEntry("list/manm", "人机验证", "CC 场景弹出验证", Icons.Filled.SmartToy),
-        SysEntry("list/customize", "自定义防护规则", "自编写 WAF 表达式", Icons.Filled.Rule)
+        SysEntry("list/customize", "自定义防护规则", "自编写 WAF 表达式", Icons.AutoMirrored.Filled.Rule)
     )),
     SysGroup("证书与集群", listOf(
         SysEntry("cert", "SSL 证书管理", "申请 / 部署 / 到期提醒", Icons.Filled.Lock),
-        SysEntry("list/load_balance", "负载均衡分组", "多节点流量分配", Icons.Filled.CallSplit),
+        SysEntry("list/load_balance", "负载均衡分组", "多节点流量分配", Icons.AutoMirrored.Filled.CallSplit),
         SysEntry("list/nodes", "集群节点", "查看各节点状态", Icons.Filled.Lan)
     )),
     SysGroup("用户与审计", listOf(

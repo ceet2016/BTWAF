@@ -56,20 +56,12 @@ fun ReportScreen() {
         Column(Modifier.fillMaxSize().padding(padding)) {
             // ── 时间范围 ──
             Column(Modifier.padding(horizontal = Space.lg, vertical = Space.sm)) {
-                ScrollableTabRow(
-                    selectedTabIndex = tab,
-                    edgePadding = 0.dp,
+                WafTabRow(
+                    labels = TABS,
+                    selectedIndex = tab,
+                    onSelect = { idx -> tab = idx },
                     containerColor = MaterialTheme.colorScheme.background,
-                    divider = {}
-                ) {
-                    TABS.forEachIndexed { i, t ->
-                        Tab(
-                            selected = tab == i,
-                            onClick = { tab = i },
-                            text = { Text(t, style = MaterialTheme.typography.labelLarge) }
-                        )
-                    }
-                }
+                )
             }
             LoadingBar(vm.loading)
             ErrorBanner(vm.error) { vm.load() }

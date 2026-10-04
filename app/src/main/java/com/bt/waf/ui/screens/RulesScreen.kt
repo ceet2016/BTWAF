@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -377,20 +378,12 @@ fun RulesScreen() {
         snackbarHost = { SnackbarHost(snackbar) }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            ScrollableTabRow(
-                selectedTabIndex = RvTab.entries.indexOf(tab),
-                edgePadding = 0.dp,
+            WafTabRow(
+                labels = RvTab.entries.map { it.label },
+                selectedIndex = RvTab.entries.indexOf(tab),
+                onSelect = { idx -> tab = RvTab.entries[idx] },
                 containerColor = MaterialTheme.colorScheme.surface,
-                divider = {}
-            ) {
-                RvTab.entries.forEach { t ->
-                    Tab(
-                        selected = tab == t,
-                        onClick = { tab = t },
-                        text = { Text(t.label, style = MaterialTheme.typography.labelLarge) }
-                    )
-                }
-            }
+            )
 
             LoadingBar(vm.loading)
             ErrorBanner(vm.error)
@@ -2353,7 +2346,7 @@ private fun RvRegionTab(env: RvEnv) {
                     }
                     GridCell {
                         MetricCard(
-                            icon = Icons.Filled.Rule,
+                            icon = Icons.AutoMirrored.Filled.Rule,
                             label = "规则条数",
                             value = vm.regionRuleTotal.toString(),
                             hint = "第 $page / $totalPages 页",

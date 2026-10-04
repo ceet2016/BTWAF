@@ -131,7 +131,7 @@ fun DashboardScreen(onOpenLogs: () -> Unit = {}, onOpenReport: () -> Unit = {}) 
             verticalArrangement = Arrangement.spacedBy(Space.md)
         ) {
             item {
-                ErrorBanner(vm.error) { refreshTick.value++ }
+                ErrorBannerFlush(vm.error) { refreshTick.value++ }
             }
 
             // ── 顶部欢迎条 ──

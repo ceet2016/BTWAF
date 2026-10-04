@@ -8,9 +8,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Rule
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.ListAlt
+import androidx.compose.material.icons.automirrored.filled.CallSplit
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,7 +45,7 @@ private enum class Tab(
 ) {
     DASH("dashboard", "概览", Icons.Filled.Dashboard, "概览"),
     SITES("sites", "防护", Icons.Filled.Shield, "防护网站"),
-    LOGS("attack_logs", "日志", Icons.Filled.ListAlt, "日志中心"),
+    LOGS("attack_logs", "日志", Icons.AutoMirrored.Filled.ListAlt, "日志中心"),
     SYSTEM("system", "系统", Icons.Filled.Settings, "系统管理")
 }
 
@@ -59,9 +64,9 @@ private val DRAWER_GROUPS = listOf(
     )),
     DrawerGroup("防护策略", listOf(
         DrawerItem("rules", "防护规则总览", Icons.Filled.VerifiedUser),
-        DrawerItem("customize", "自定义规则", Icons.Filled.Rule),
+        DrawerItem("customize", "自定义规则", Icons.AutoMirrored.Filled.Rule),
         DrawerItem("list/regional", "区域拦截", Icons.Filled.Public),
-        DrawerItem("list/exclusive", "专属规则", Icons.Filled.OpenInNew),
+        DrawerItem("list/exclusive", "专属规则", Icons.AutoMirrored.Filled.OpenInNew),
         DrawerItem("replace", "内容替换", Icons.Filled.FindReplace),
         DrawerItem("list/http_method", "HTTP 方法限制", Icons.Filled.SwapHoriz),
         DrawerItem("list/http_header_len", "请求头长度限制", Icons.Filled.Compress),
@@ -86,7 +91,7 @@ private val DRAWER_GROUPS = listOf(
         DrawerItem("cert", "SSL 证书", Icons.Filled.Lock),
         DrawerItem("nginx", "反向代理", Icons.Filled.Dns),
         DrawerItem("waf_master", "DNS 集群", Icons.Filled.Hub),
-        DrawerItem("list/load_balance", "负载均衡分组", Icons.Filled.CallSplit),
+        DrawerItem("list/load_balance", "负载均衡分组", Icons.AutoMirrored.Filled.CallSplit),
         DrawerItem("list/nodes", "集群节点", Icons.Filled.Lan)
     )),
     DrawerGroup("用户与系统", listOf(
@@ -402,5 +407,34 @@ fun MainScreen(onLogout: () -> Unit) {
                 }
             }
         }
+    }
+
+    // token 过期重登录：aawaf 的 JWT ttl 默认 2 小时，过期后所有 /api 返回
+    // "Token is expired"。这里统一拦一次，弹登录框让用户重新登录，
+    // 而不是让每个页面各自显示错误、用户逐页点重试（重试也必然失败）。
+    val needRelogin by repo.needRelogin.collectAsState()
+    if (needRelogin) {
+        AlertDialog(
+            onDismissRequest = { /* 必须登录，不允许点外面关掉 */ },
+            icon = { Icon(Icons.Filled.LockClock, null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("登录已过期") },
+            text = {
+                //文案要短：AlertDialog 的文本区没有高度上限，
+                // 字一多对话框就撑得很高、确认按钮被顶到屏幕下缘。
+                Text(
+                    "请重新登录后继续操作。",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        repo.acknowledgeReloginPrompt()
+                        onLogout()
+                    },
+                    shape = RoundedCornerShape(10.dp)
+                ) { Text("去登录") }
+            }
+        )
     }
 }

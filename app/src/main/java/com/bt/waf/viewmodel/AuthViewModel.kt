@@ -71,7 +71,12 @@ class AuthViewModel(private val repo: WafRepository) : ViewModel() {
                 repo.authStore.username = username
                 repo.applyConnection(webUrl, trust)
                 repo.login(username, password, captchaId, captchaInput.takeIf { it.isNotBlank() })
-                    .onSuccess { onSuccess() }
+                    .onSuccess {
+                        // 清掉「需要重新登录」标志：否则登录成功后
+                        // MainScreen 的过期弹窗会立刻再弹一次。
+                        repo.acknowledgeReloginPrompt()
+                        onSuccess()
+                    }
                     .onFailure {
                         error = it.message ?: "登录失败"
                         // 失败后服务端通常已要求验证码，立即取一张新的

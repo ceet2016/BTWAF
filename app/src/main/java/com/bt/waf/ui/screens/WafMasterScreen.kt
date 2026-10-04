@@ -163,20 +163,12 @@ fun WafMasterScreen() {
         snackbarHost = { SnackbarHost(snackbar) }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            ScrollableTabRow(
-                selectedTabIndex = WmTab.entries.indexOf(tab),
-                edgePadding = 0.dp,
+            WafTabRow(
+                labels = WmTab.entries.map { it.label },
+                selectedIndex = WmTab.entries.indexOf(tab),
+                onSelect = { idx -> tab = WmTab.entries[idx] },
                 containerColor = MaterialTheme.colorScheme.surface,
-                divider = {}
-            ) {
-                WmTab.entries.forEach { t ->
-                    Tab(
-                        selected = tab == t,
-                        onClick = { tab = t },
-                        text = { Text(t.label, style = MaterialTheme.typography.labelLarge) }
-                    )
-                }
-            }
+            )
 
             LoadingBar(vm.loading)
             ErrorBanner(vm.error) {

@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,7 +46,7 @@ private val LOG_ENTRIES = listOf(
     LogEntry("list/attack_logs_full", "拦截日志", "每一条被 WAF 拦下的请求", Icons.Filled.GppBad, Color(0xFFDC2626)),
     LogEntry("list/ip_block_log", "IP 封禁记录", "自动封禁与解封历史", Icons.Filled.Block, Color(0xFFF97316)),
     LogEntry("list/cc_events", "CC 攻击事件", "高频访问触发的挑战记录", Icons.Filled.Bolt, Color(0xFF7C3AED)),
-    LogEntry("list/rule_hit", "规则命中日志", "哪条规则被触发过", Icons.Filled.Rule, Color(0xFF2563EB)),
+    LogEntry("list/rule_hit", "规则命中日志", "哪条规则被触发过", Icons.AutoMirrored.Filled.Rule, Color(0xFF2563EB)),
     LogEntry("list/opt_logs", "操作日志", "管理员的所有变更操作", Icons.Filled.History, Color(0xFF0891B2))
 )
 

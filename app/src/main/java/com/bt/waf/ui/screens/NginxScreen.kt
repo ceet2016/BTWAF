@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.CallSplit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -187,20 +188,12 @@ fun NginxScreen() {
         snackbarHost = { SnackbarHost(snackbar) }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            ScrollableTabRow(
-                selectedTabIndex = NgTab.entries.indexOf(tab),
-                edgePadding = 0.dp,
+            WafTabRow(
+                labels = NgTab.entries.map { it.label },
+                selectedIndex = NgTab.entries.indexOf(tab),
+                onSelect = { idx -> tab = NgTab.entries[idx] },
                 containerColor = MaterialTheme.colorScheme.surface,
-                divider = {}
-            ) {
-                NgTab.entries.forEach { t ->
-                    Tab(
-                        selected = tab == t,
-                        onClick = { tab = t },
-                        text = { Text(t.label, style = MaterialTheme.typography.labelLarge) }
-                    )
-                }
-            }
+            )
             LoadingBar(vm.loading)
             ErrorBanner(vm.error) {
                 when (tab) {
@@ -696,20 +689,12 @@ private fun SiteDetailSheet(
             }
             Spacer(Modifier.height(Space.md))
 
-            ScrollableTabRow(
-                selectedTabIndex = SheetTab.entries.indexOf(tab),
-                edgePadding = 0.dp,
+            WafTabRow(
+                labels = SheetTab.entries.map { it.label },
+                selectedIndex = SheetTab.entries.indexOf(tab),
+                onSelect = { idx -> tab = SheetTab.entries[idx] },
                 containerColor = MaterialTheme.colorScheme.surface,
-                divider = {}
-            ) {
-                SheetTab.entries.forEach { t ->
-                    Tab(
-                        selected = tab == t,
-                        onClick = { tab = t },
-                        text = { Text(t.label, style = MaterialTheme.typography.labelLarge) }
-                    )
-                }
-            }
+            )
             Spacer(Modifier.height(Space.md))
             LoadingBar(vm.loading)
 
@@ -1890,7 +1875,7 @@ private fun LbTab(
             if (vm.tcpLoadBalances.isEmpty() && !vm.loading) {
                 item {
                     EmptyState(
-                        icon = Icons.Filled.CallSplit,
+                        icon = Icons.AutoMirrored.Filled.CallSplit,
                         title = "还没有端口转发配置",
                         description = "新增一条 TCP/UDP 转发，把外部端口流量分摊到多个后端节点",
                         actionText = "刷新",
@@ -1902,7 +1887,7 @@ private fun LbTab(
             items(vm.tcpLoadBalances.entries.toList()) { (name, cfg) ->
                 WafCard {
                     ListRow(
-                        icon = Icons.Filled.CallSplit,
+                        icon = Icons.AutoMirrored.Filled.CallSplit,
                         title = name,
                         subtitle = listOf(
                             pickString(cfg, "protocol").uppercase().ifBlank { "TCP" },
@@ -2018,7 +2003,7 @@ private fun TcpLbDialog(
 
     FormDialog(
         title = if (editing) "编辑端口转发" else "新增端口转发",
-        icon = Icons.Filled.CallSplit,
+        icon = Icons.AutoMirrored.Filled.CallSplit,
         confirmText = if (editing) "保存" else "创建",
         busy = vm.saving,
         error = err,

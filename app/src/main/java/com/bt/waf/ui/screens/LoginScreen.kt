@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bt.waf.WafApplication
-import com.bt.waf.ui.components.ErrorBanner
+import com.bt.waf.ui.components.ErrorBannerFlush
 import com.bt.waf.ui.components.PrimaryButton
 import com.bt.waf.ui.components.WafCard
 import com.bt.waf.ui.theme.Space
@@ -234,7 +234,8 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
 
                 if (vm.error != null) {
                     Spacer(Modifier.height(Space.md))
-                    ErrorBanner(vm.error)
+                    // 登录表单本身就是居中窄栏，再加水平留白会把提示条缩得更窄。
+                    ErrorBannerFlush(vm.error)
                 }
 
                 Spacer(Modifier.height(Space.lg))
@@ -248,10 +249,15 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
 
             Spacer(Modifier.height(Space.lg))
             Text(
-                "登录流程：访问安全入口建立会话 → 账号密码换取 JWT → 后续请求携带令牌",
+                // 这行之前是单行 Text，实测在 1080 宽屏上末尾被截断
+                // （显示成「…携带令」少半个字）。原因是它落在了
+                // 带水平 padding 的 Column 里，可用宽度比整屏窄，
+                // 单行 Text 又不自动换行。改成显式两行 + 居中即可。
+                "登录流程：访问安全入口建立会话 → 账号密码换取 JWT\n→ 后续请求携带令牌",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                lineHeight = MaterialTheme.typography.labelSmall.fontSize * 1.6
             )
             Spacer(Modifier.height(Space.xxl))
         }
