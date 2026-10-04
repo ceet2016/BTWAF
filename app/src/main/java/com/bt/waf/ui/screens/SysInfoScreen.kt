@@ -53,7 +53,7 @@ fun SysInfoScreen() {
     ) {
         LoadingBar(vm.loading)
         LazyColumn(
-            contentPadding = PaddingValues(Space.lg),
+            contentPadding = cardPadding,
             verticalArrangement = Arrangement.spacedBy(Space.md)
         ) {
             item { ErrorBanner(vm.error) { vm.load() } }

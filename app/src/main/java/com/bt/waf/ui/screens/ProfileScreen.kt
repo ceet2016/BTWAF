@@ -95,7 +95,7 @@ fun ProfileScreen() {
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(Space.lg),
+            contentPadding = cardPadding,
             verticalArrangement = Arrangement.spacedBy(Space.md)
         ) {
             // 账号名片
@@ -198,7 +198,7 @@ fun ProfileScreen() {
             items2(actions) { a ->
                 WafCard(
                     onClick = { if (!busy) a.action() },
-                    contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.md)
+                    contentPadding = rowCardPadding
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                                                 IconBadge(icon = a.icon, tint = a.tint, size = 36.dp, corner = 10.dp)

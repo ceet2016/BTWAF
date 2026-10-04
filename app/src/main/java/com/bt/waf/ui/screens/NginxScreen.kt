@@ -323,7 +323,7 @@ private fun SitesTab(
         LazyColumn(
             contentPadding = PaddingValues(
                 start = Space.lg, end = Space.lg,
-                top = Space.md, bottom = 92.dp
+                top = Space.md, bottom = 88.dp
             ),
             verticalArrangement = Arrangement.spacedBy(Space.sm)
         ) {
@@ -364,7 +364,7 @@ private fun SitesTab(
             }
 
             items(vm.sites) { site ->
-                WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.sm)) {
+                WafCard(contentPadding = rowCardPadding) {
                     ListRow(
                         icon = Icons.Filled.Language,
                         title = siteNameOf(site),
@@ -386,15 +386,22 @@ private fun SitesTab(
             if (totalPages > 1) {
                 item {
                     WafCard {
+                        // 分页栏三段式：左按钮 / 中页码 / 右按钮。
+                        // 之前用 Spacer(weight(1f)) 把「下一页」推到右边，
+                        // 页码就紧贴在「上一页」右边而不是几何中心 ——
+                        // 页码越宽偏移越明显，视觉上就是「不对称」。
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             SmallButton("上一页", enabled = page > 1) { onPage(page - 1) }
-                            Spacer(Modifier.width(Space.sm))
-                            Text(
-                                "$page / $totalPages",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.weight(1f))
+                            Box(
+                                Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "$page / $totalPages",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                             SmallButton("下一页", enabled = page < totalPages) { onPage(page + 1) }
                         }
                     }
@@ -1112,7 +1119,7 @@ private fun DomainsTab(
         LazyColumn(
             contentPadding = PaddingValues(
                 start = Space.lg, end = Space.lg,
-                top = Space.md, bottom = 92.dp
+                top = Space.md, bottom = 88.dp
             ),
             verticalArrangement = Arrangement.spacedBy(Space.sm)
         ) {
@@ -1441,7 +1448,7 @@ private fun SslTab(
         LazyColumn(
             contentPadding = PaddingValues(
                 start = Space.lg, end = Space.lg,
-                top = Space.md, bottom = 92.dp
+                top = Space.md, bottom = 88.dp
             ),
             verticalArrangement = Arrangement.spacedBy(Space.sm)
         ) {
@@ -1864,7 +1871,7 @@ private fun LbTab(
         LazyColumn(
             contentPadding = PaddingValues(
                 start = Space.lg, end = Space.lg,
-                top = Space.md, bottom = 92.dp
+                top = Space.md, bottom = 88.dp
             ),
             verticalArrangement = Arrangement.spacedBy(Space.sm)
         ) {
@@ -2116,7 +2123,7 @@ private fun TcpLbDialog(
         SectionHeader("后端节点", subtitle = "${nodes.size} 个")
         Spacer(Modifier.height(Space.xs))
         nodes.forEachIndexed { i, n ->
-            WafCard(contentPadding = PaddingValues(Space.md)) {
+            WafCard(contentPadding = cardPadding) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "节点 ${i + 1}",
@@ -2175,10 +2182,7 @@ private fun SettingsTab(
     }
 
     LazyColumn(
-        contentPadding = PaddingValues(
-            start = Space.lg, end = Space.lg,
-            top = Space.md, bottom = Space.xxl
-        ),
+        contentPadding = cardPadding,
         verticalArrangement = Arrangement.spacedBy(Space.sm)
     ) {
         item {

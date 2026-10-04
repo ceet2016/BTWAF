@@ -81,7 +81,7 @@ fun CertScreen() {
                 )
 
                 else -> LazyColumn(
-                    contentPadding = PaddingValues(Space.lg),
+                    contentPadding = cardPadding,
                     verticalArrangement = Arrangement.spacedBy(Space.sm)
                 ) {
                     item {

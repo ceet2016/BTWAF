@@ -74,7 +74,7 @@ fun LogCenterScreen(onOpen: (String) -> Unit) {
     ) {
         LoadingBar(vm.loading)
         LazyColumn(
-            contentPadding = PaddingValues(Space.lg),
+            contentPadding = cardPadding,
             verticalArrangement = Arrangement.spacedBy(Space.md)
         ) {
             item {
@@ -99,7 +99,7 @@ fun LogCenterScreen(onOpen: (String) -> Unit) {
             // 同组入口收进一张卡片：组内条目间距 2dp，组间 12dp，
             // 视觉上是「一块分类区」而不是「一摞散卡」。
             item {
-                WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.xs)) {
+                WafCard(contentPadding = rowCardPadding) {
                     LOG_ENTRIES.forEachIndexed { i, e ->
                         if (i > 0) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

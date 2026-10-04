@@ -259,7 +259,7 @@ fun SettingsScreen() {
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(Space.lg),
+            contentPadding = cardPadding,
             verticalArrangement = Arrangement.spacedBy(Space.sm)
         ) {
             item {
@@ -295,7 +295,7 @@ fun SettingsScreen() {
             items(items, key = { it.panel.name + it.title }) { it ->
                 WafCard(
                     onClick = { open(it.panel) },
-                    contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.md)
+                    contentPadding = rowCardPadding
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconBadge(icon = it.icon, tint = it.tint, size = 36.dp, corner = 10.dp)
@@ -809,6 +809,8 @@ private fun SettingsDialog(
                 onClick = onConfirm,
                 enabled = !saving,
                 shape = RoundedCornerShape(10.dp),
+                // 与 FormDialog 的确认按钮保持同一内边距，
+                // 否则两个弹窗的「保存」按钮宽度不同，看起来就不对称。
                 contentPadding = PaddingValues(horizontal = 20.dp)
             ) {
                 if (saving) {

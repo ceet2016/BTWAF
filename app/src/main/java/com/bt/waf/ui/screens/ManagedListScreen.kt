@@ -213,15 +213,13 @@ fun ManagedListScreen(config: ListConfig) {
                         state = listState,
                         contentPadding = PaddingValues(
                             start = Space.lg, end = Space.lg,
-                            top = Space.xs, bottom = 88.dp
+                            top = Space.md, bottom = 88.dp
                         ),
                         verticalArrangement = Arrangement.spacedBy(Space.sm)
                     ) {
                         item {
                             WafCard(
-                                contentPadding = PaddingValues(
-                                    horizontal = Space.md, vertical = Space.xs
-                                )
+                                contentPadding = rowCardPadding
                             ) {
                                 vm.items.forEachIndexed { idx, item ->
                                     if (idx > 0) {

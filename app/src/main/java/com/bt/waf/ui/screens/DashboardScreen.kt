@@ -127,7 +127,7 @@ fun DashboardScreen(onOpenLogs: () -> Unit = {}, onOpenReport: () -> Unit = {}) 
     ) {
         LoadingBar(vm.loading)
         LazyColumn(
-            contentPadding = PaddingValues(Space.lg),
+            contentPadding = cardPadding,
             verticalArrangement = Arrangement.spacedBy(Space.md)
         ) {
             item {
@@ -352,7 +352,7 @@ fun DashboardScreen(onOpenLogs: () -> Unit = {}, onOpenReport: () -> Unit = {}) 
             item {
                 WafCard(
                     onClick = onOpenReport,
-                    contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.sm)
+                    contentPadding = rowCardPadding
                 ) {
                     ListRow(
                         icon = Icons.Filled.Assessment,

@@ -84,11 +84,11 @@ fun SystemHomeScreen(onOpen: (String) -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(Space.lg),
+        contentPadding = cardPadding,
         verticalArrangement = Arrangement.spacedBy(Space.md)
     ) {
         item {
-            WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.sm)) {
+            WafCard(contentPadding = rowCardPadding) {
                 ListRow(
                     icon = Icons.Filled.Settings,
                     title = "系统管理",
@@ -106,7 +106,7 @@ fun SystemHomeScreen(onOpen: (String) -> Unit) {
             item(key = "g_${group.title}") {
                 // 同一分组的入口收进一张卡片：分组之间留白 16dp，
                 // 组内条目间距 2dp，视觉上「一组一块」而不是「一堆散卡」。
-                WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.xs)) {
+                WafCard(contentPadding = rowCardPadding) {
                     group.entries.forEachIndexed { i, entry ->
                         if (i > 0) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

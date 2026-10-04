@@ -493,7 +493,7 @@ private fun RvEntryCard(
     action: (@Composable () -> Unit)? = null,
     entries: List<RvEntry>
 ) {
-    WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.xs)) {
+    WafCard(contentPadding = rowCardPadding) {
         SectionHeader(title, subtitle = subtitle, action = action)
         Spacer(Modifier.height(Space.xs))
         entries.forEachIndexed { i, e ->
@@ -540,6 +540,10 @@ private fun RvEntryCard(
 }
 
 /** 每个 Tab 的 LazyColumn 统一内边距与间距。 */
+/**
+ * 规则页各Tab 共用的列表容器内边距。
+ * 底边留Space.xxl 是因为本页没有 FAB，需要给最后一个卡片多留呼吸位。
+ */
 private fun rvTabPadding() = PaddingValues(
     start = Space.lg, end = Space.lg,
     top = Space.md, bottom = Space.xxl

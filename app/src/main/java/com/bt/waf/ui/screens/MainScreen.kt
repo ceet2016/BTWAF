@@ -272,11 +272,20 @@ fun MainScreen(onLogout: () -> Unit) {
                                 .padding(horizontal = Space.md, vertical = 11.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Logout, null,
-                                modifier = Modifier.size(19.dp),
-                                tint = MaterialTheme.colorScheme.error
-                            )
+                            // 补一个 3dp 的透明指示条占位：导航项是
+                                // 指示条 + Space.md + 图标，退出登录没有指示条，
+                                // 不占位的话这一行的图标会比上面所有项左移 3dp + Space.md。
+                                Box(
+                                    Modifier
+                                        .width(3.dp)
+                                        .height(18.dp)
+                                )
+                                Spacer(Modifier.width(Space.md))
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Logout, null,
+                                    modifier = Modifier.size(19.dp),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
                             Spacer(Modifier.width(Space.md))
                             Text(
                                 "退出登录",

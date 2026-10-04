@@ -276,7 +276,7 @@ private fun VendorTab(
         LazyColumn(
             contentPadding = PaddingValues(
                 start = Space.lg, end = Space.lg,
-                top = Space.md, bottom = 92.dp
+                top = Space.md, bottom = 88.dp
             ),
             verticalArrangement = Arrangement.spacedBy(Space.sm)
         ) {
@@ -727,7 +727,7 @@ private fun DomainTab(
         LazyColumn(
             contentPadding = PaddingValues(
                 start = Space.lg, end = Space.lg,
-                top = Space.md, bottom = 92.dp
+                top = Space.md, bottom = 88.dp
             ),
             verticalArrangement = Arrangement.spacedBy(Space.sm)
         ) {
@@ -1008,7 +1008,7 @@ private fun CheckDomainDialog(vm: WafMasterViewModel, onDismiss: () -> Unit) {
             vm.domainCheck.forEach { (root, st) ->
                 val added = st["add_status"].toBoolState()
                 val dnsOk = st["dns_status"].toBoolState()
-                WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.sm)) {
+                WafCard(contentPadding = rowCardPadding) {
                     ListRow(
                         icon = if (added) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
                         title = root,
@@ -1180,7 +1180,7 @@ private fun RecordTab(
         LazyColumn(
             contentPadding = PaddingValues(
                 start = Space.lg, end = Space.lg,
-                top = Space.md, bottom = 92.dp
+                top = Space.md, bottom = 88.dp
             ),
             verticalArrangement = Arrangement.spacedBy(Space.sm)
         ) {
@@ -1687,7 +1687,7 @@ private fun LoadTab(
         LazyColumn(
             contentPadding = PaddingValues(
                 start = Space.lg, end = Space.lg,
-                top = Space.md, bottom = 92.dp
+                top = Space.md, bottom = 88.dp
             ),
             verticalArrangement = Arrangement.spacedBy(Space.sm)
         ) {
@@ -2034,7 +2034,7 @@ private fun LoadGroupDialog(
                 if (sid.isBlank()) return@forEach
                 val on = sid in picked
                 val ex = extra[sid] ?: WmNodeExtra()
-                WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.sm)) {
+                WafCard(contentPadding = rowCardPadding) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
                             checked = on,

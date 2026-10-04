@@ -104,7 +104,7 @@ fun NotificationsScreen() {
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(Space.lg),
+            contentPadding = cardPadding,
             verticalArrangement = Arrangement.spacedBy(Space.sm)
         ) {
             item {
@@ -139,7 +139,7 @@ fun NotificationsScreen() {
                     val configured = ch["is_configured"] == true
                     val cfg = ch["config"].asMap()
 
-                    WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.md)) {
+                    WafCard(contentPadding = rowCardPadding) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                                                         IconBadge(icon = meta.icon, tint = meta.tint, size = 38.dp, corner = 11.dp)
                             Spacer(Modifier.width(Space.md))

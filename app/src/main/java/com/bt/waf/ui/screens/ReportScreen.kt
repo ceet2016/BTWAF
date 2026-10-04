@@ -144,7 +144,7 @@ private fun ReportOverview(
     val blocked = vm.ipList.count { it.l("block_status") != 0L }
 
     LazyColumn(
-        contentPadding = PaddingValues(Space.lg),
+        contentPadding = cardPadding,
         verticalArrangement = Arrangement.spacedBy(Space.md)
     ) {
         item {
@@ -258,11 +258,11 @@ private fun ReportIpList(vm: ReportViewModel, onUnblock: (Map<String, Any?>) -> 
         return
     }
     LazyColumn(
-        contentPadding = PaddingValues(Space.lg),
+        contentPadding = cardPadding,
         verticalArrangement = Arrangement.spacedBy(Space.sm)
     ) {
         item {
-            WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.xs)) {
+            WafCard(contentPadding = rowCardPadding) {
                 vm.ipList.forEachIndexed { i, row ->
                     if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Row(
@@ -314,11 +314,11 @@ private fun ReportUriList(vm: ReportViewModel) {
         return
     }
     LazyColumn(
-        contentPadding = PaddingValues(Space.lg),
+        contentPadding = cardPadding,
         verticalArrangement = Arrangement.spacedBy(Space.sm)
     ) {
         item {
-            WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.xs)) {
+            WafCard(contentPadding = rowCardPadding) {
                 vm.uriTop.forEachIndexed { i, row ->
                     if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     ListRow(
@@ -344,11 +344,11 @@ private fun ReportRuleHit(vm: ReportViewModel) {
         return
     }
     LazyColumn(
-        contentPadding = PaddingValues(Space.lg),
+        contentPadding = cardPadding,
         verticalArrangement = Arrangement.spacedBy(Space.sm)
     ) {
         item {
-            WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.xs)) {
+            WafCard(contentPadding = rowCardPadding) {
                 vm.ruleHit.forEachIndexed { i, row ->
                     if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Row(

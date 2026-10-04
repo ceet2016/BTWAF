@@ -40,6 +40,29 @@ import java.util.Locale
 private val CardShape = RoundedCornerShape(16.dp)
 private val CardBorder = @Composable { BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) }
 
+/* ══════════════════ 卡片内边距标准 ══════════════════ */
+
+/**
+ * 内边距只有两种语义，不允许页面自己写第三种。
+ *
+ * 之前全站出现过 6 种 contentPadding 写法，其中「列表行卡片」的垂直内边距
+ * 同时存在 `vertical = Space.xs`（4dp）和 `vertical = Space.sm`（8dp）两种值：
+ * Nginx 页面的站点行是 8dp，规则/自定义/报表页的同类行是 4dp。
+ * 视觉后果是——从 Nginx 切到防护规则，同一张卡片的高度差了一倍，
+ * 列表节奏被打乱，这就是用户说的「有的地方不对称」。
+ *
+ * 现在把语义收敛到这两个常量：
+ *  - [cardPadding]信息卡：标题、说明、键值表、图表。上下左右都放宽。
+ *  - [rowCardPadding]  列表行卡：内部只放一个 [ListRow] / [CompactNavRow]。
+ *                        ListRow 自身已有 vertical = Space.sm 的内边距，
+ *                        这里水平收进到 Space.md，让图标与相邻卡片的图标对齐。
+ */
+val cardPadding: PaddingValues
+    @Composable get() = PaddingValues(Space.lg)
+
+val rowCardPadding: PaddingValues
+    @Composable get() = PaddingValues(horizontal = Space.md, vertical = Space.xs)
+
 /**
  * 统一卡片。
  *

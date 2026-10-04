@@ -375,7 +375,7 @@ private fun SiteCard(
         .joinToString(" · ")
     var menu by remember { mutableStateOf(false) }
 
-    WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.sm)) {
+    WafCard(contentPadding = rowCardPadding) {
         ListRow(
             icon = if (on) Icons.Filled.Shield else Icons.Filled.ShieldMoon,
             title = name,

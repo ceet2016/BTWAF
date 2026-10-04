@@ -303,7 +303,7 @@ private fun CwListTab(
         LazyColumn(
             contentPadding = PaddingValues(
                 start = Space.lg, end = Space.lg,
-                top = Space.md, bottom = 92.dp
+                top = Space.md, bottom = 88.dp
             ),
             verticalArrangement = Arrangement.spacedBy(Space.sm)
         ) {
@@ -362,7 +362,7 @@ private fun CwListTab(
             }
 
             item {
-                WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.xs)) {
+                WafCard(contentPadding = rowCardPadding) {
                     if (vm.rules.isEmpty() && !vm.listLoading) {
                         EmptyState(
                             icon = Icons.Filled.Rule,
@@ -549,10 +549,7 @@ private fun CwBlockLogTab(
     Column(Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(
-                start = Space.lg, end = Space.lg,
-                top = Space.md, bottom = Space.lg
-            ),
+            contentPadding = cardPadding,
             verticalArrangement = Arrangement.spacedBy(Space.sm)
         ) {
             item {
@@ -624,7 +621,7 @@ private fun CwBlockLogTab(
                 }
             } else {
                 item {
-                    WafCard(contentPadding = PaddingValues(horizontal = Space.md, vertical = Space.xs)) {
+                    WafCard(contentPadding = rowCardPadding) {
                         entries.forEachIndexed { idx, e ->
                             if (idx > 0) {
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -739,10 +736,7 @@ private fun CwTransferTab(
     var exampleOut by remember { mutableStateOf("") }
 
     LazyColumn(
-        contentPadding = PaddingValues(
-            start = Space.lg, end = Space.lg,
-            top = Space.md, bottom = Space.lg
-        ),
+        contentPadding = cardPadding,
         verticalArrangement = Arrangement.spacedBy(Space.sm)
     ) {
         item {
@@ -761,7 +755,7 @@ private fun CwTransferTab(
                 )
                 if (exportInfo != null) {
                     Spacer(Modifier.height(Space.sm))
-                    WafCard(contentPadding = PaddingValues(Space.md)) {
+                    WafCard(contentPadding = cardPadding) {
                         DataRow("文件名", exportInfo!!.fileName)
                         DataRow("大小", formatBytes(exportInfo!!.size))
                         DataRowDivider(
@@ -964,10 +958,7 @@ private fun CwRuleEditor(
             ) { padding ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().padding(padding),
-                    contentPadding = PaddingValues(
-                        start = Space.lg, end = Space.lg,
-                        top = Space.md, bottom = Space.xxl
-                    ),
+                    contentPadding = cardPadding,
                     verticalArrangement = Arrangement.spacedBy(Space.sm)
                 ) {
                     // ── 基础信息 ──
