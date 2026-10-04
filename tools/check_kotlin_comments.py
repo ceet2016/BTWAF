@@ -18,13 +18,58 @@ import sys
 
 
 def scan(text):
-    """返回 (状态, 首个出问题的行号)。状态为 ok / unclosed / extra_close。"""
+    """返回 (状态, 首个出问题的行号)。状态为 ok / unclosed / extra_close。
+
+    必须跳过字符串字面量：像 "*/*" 这种 MIME 通配符写在代码里时，
+    其中的 */ 会被本脚本误判成注释提前闭合（曾因此报假警）。
+    """
     depth = 0
     line = 1
     opened_at = 0
     i = 0
     n = len(text)
     while i < n:
+        c = text[i]
+        # 行注释：直接跳到行尾
+        if c == '/' and i + 1 < n and text[i + 1] == '/':
+            while i < n and text[i] != '\n':
+                i += 1
+            continue
+        # 字符串字面量："..." 与 """..."""
+        if c == '"':
+            triple = text.startswith('"""', i)
+            i += 3 if triple else 1
+            while i < n:
+                if text[i] == '\\':
+                    i += 2
+                    continue
+                if text[i] == '\n':
+                    line += 1
+                    if not triple:
+                        break  # 单行字符串未闭合，交给 Kotlin 自己报错
+                if triple and text.startswith('"""', i):
+                    i += 3
+                    break
+                if not triple and text[i] == '"':
+                    i += 1
+                    break
+                i += 1
+            continue
+        # 字符字面量 'x'
+        if c == "'":
+            i += 1
+            while i < n:
+                if text[i] == '\\':
+                    i += 2
+                    continue
+                if text[i] == "'":
+                    i += 1
+                    break
+                if text[i] == '\n':
+                    line += 1
+                    break
+                i += 1
+            continue
         if text.startswith('/*', i):
             depth += 1
             if depth == 1:
@@ -37,7 +82,7 @@ def scan(text):
                 return 'extra_close', line
             i += 2
             continue
-        if text[i] == '\n':
+        if c == '\n':
             line += 1
         i += 1
     if depth > 0:

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    customize/export 落地的文件位于应用缓存目录（cacheDir/waf_transfer），
+    属于内部存储，没有 FileProvider 就无法把导出结果分享给用户。
+    这里只暴露 cache 下的 waf_transfer 子目录，不开放整个缓存。
+-->
+<paths>
+    <cache-path name="waf_transfer" path="waf_transfer/" />
+</paths>

@@ -3,6 +3,7 @@ package com.bt.waf.data.store
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.net.toUri
+import java.io.File
 
 /**
  * 持久化 WAF 连接信息（SharedPreferences，简单同步读写）。
@@ -11,8 +12,10 @@ import androidx.core.net.toUri
  */
 class AuthStore(context: Context) {
 
+    private val appContext: Context = context.applicationContext
+
     private val prefs: SharedPreferences =
-        context.applicationContext.getSharedPreferences("waf_auth", Context.MODE_PRIVATE)
+        appContext.getSharedPreferences("waf_auth", Context.MODE_PRIVATE)
 
     var webUrl: String
         get() = prefs.getString(KEY_WEB_URL, "") ?: ""
@@ -57,6 +60,15 @@ class AuthStore(context: Context) {
 
     val apiBase: String get() = parsed().apiBase
     val adminFull: String get() = parsed().adminFull
+
+    /**
+     * 文件下载/上传的落地目录。
+     *
+     * 刻意不用公共目录（Environment.DIRECTORY_DOWNLOADS）：那需要 WRITE_EXTERNAL_STORAGE，
+     * 且 API 29+ 分区存储下即使申请也会被拒。cacheDir 无需任何权限，
+     * 导出后由界面用 FileProvider/分享 Intent 交给用户即可。
+     */
+    val transferDir: File get() = File(appContext.cacheDir, "waf_transfer").apply { mkdirs() }
 
     companion object {
         private const val KEY_WEB_URL = "web_url"

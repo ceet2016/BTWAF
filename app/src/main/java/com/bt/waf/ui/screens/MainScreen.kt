@@ -59,6 +59,7 @@ private val DRAWER_GROUPS = listOf(
     )),
     DrawerGroup("防护策略", listOf(
         DrawerItem("rules", "防护规则总览", Icons.Filled.VerifiedUser),
+        DrawerItem("customize", "自定义规则", Icons.Filled.Rule),
         DrawerItem("list/regional", "区域拦截", Icons.Filled.Public),
         DrawerItem("list/exclusive", "专属规则", Icons.Filled.OpenInNew),
         DrawerItem("replace", "内容替换", Icons.Filled.FindReplace),
@@ -79,11 +80,12 @@ private val DRAWER_GROUPS = listOf(
     )),
     DrawerGroup("访问控制", listOf(
         DrawerItem("list/speed", "访问限速", Icons.Filled.Speed),
-        DrawerItem("list/manm", "人机验证", Icons.Filled.SmartToy),
-        DrawerItem("list/customize", "自定义防护规则", Icons.Filled.Rule)
+        DrawerItem("list/manm", "人机验证", Icons.Filled.SmartToy)
     )),
     DrawerGroup("证书与集群", listOf(
         DrawerItem("cert", "SSL 证书", Icons.Filled.Lock),
+        DrawerItem("nginx", "反向代理", Icons.Filled.Dns),
+        DrawerItem("waf_master", "DNS 集群", Icons.Filled.Hub),
         DrawerItem("list/load_balance", "负载均衡分组", Icons.Filled.CallSplit),
         DrawerItem("list/nodes", "集群节点", Icons.Filled.Lan)
     )),
@@ -107,7 +109,10 @@ private val ALL_TITLES: Map<String, String> =
         "cert" to "SSL 证书",
         "sysinfo" to "系统信息",
         "replace" to "内容替换",
-        "ip_group" to "IP 分组"
+        "ip_group" to "IP 分组",
+        "customize" to "自定义防护规则",
+        "nginx" to "反向代理",
+        "waf_master" to "DNS 集群"
     ) + DRAWER_GROUPS.flatMap { g -> g.items.map { it.route to it.label } }).toMap()
 
 /** 哪些路由需要显示返回箭头（不在一级 Tab 里的页面）。 */
@@ -368,6 +373,9 @@ fun MainScreen(onLogout: () -> Unit) {
                 composable("sysinfo") { SysInfoScreen() }
                 composable("ip_group") { IpGroupScreen() }
                 composable("replace") { ReplaceScreen() }
+                composable("customize") { CustomizeScreen() }
+                composable("nginx") { NginxScreen() }
+                composable("waf_master") { WafMasterScreen() }
 
                 composable(
                     "list/{key}",
