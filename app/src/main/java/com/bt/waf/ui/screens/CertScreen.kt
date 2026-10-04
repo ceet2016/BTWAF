@@ -42,6 +42,7 @@ fun CertScreen() {
     var showApply by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<Map<String, Any?>?>(null) }
     var deployTarget by remember { mutableStateOf<Map<String, Any?>?>(null) }
+    var formError by remember { mutableStateOf<String?>(null) }
     val form = remember { mutableStateMapOf<String, String>() }
 
     LaunchedEffect(Unit) { vm.load(); vm.checkBtAccount() }
@@ -180,63 +181,57 @@ fun CertScreen() {
 
     /* ── 申请 / 续签 ── */
     if (showApply) {
-        AlertDialog(
-            onDismissRequest = { showApply = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    val domains = form["domain"].orEmpty()
-                        .split("\n").map { it.trim() }.filter { it.isNotBlank() }
-                    if (domains.isEmpty()) return@TextButton
+        FormDialog(
+            title = "申请 Let's Encrypt 证书",
+            icon = Icons.Filled.Lock,
+            confirmText = "提交",
+            busy = vm.saving,
+            error = formError,
+            onDismiss = { showApply = false; formError = null },
+            onConfirm = {
+                // 兼容换行 / 逗号两种分隔
+                val domains = form["domain"].orEmpty()
+                    .split('\n', ',', ' ')
+                    .map { it.trim() }.filter { it.isNotEmpty() }
+                if (domains.isEmpty()) {
+                    formError = "请填写至少一个域名"
+                } else {
                     val siteId = form["site_id"].orEmpty().trim()
                     vm.applyCert(domains, siteId) { e ->
-                        if (e == null) showApply = false else vm.error = e
-                    }
-                }) { Text("提交") }
-            },
-            dismissButton = { TextButton(onClick = { showApply = false }) { Text("取消") } },
-            title = { Text("申请 Let's Encrypt 证书") },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    if (vm.btAccountOk == false) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.tertiaryContainer,
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                "未检测到宝塔账号登录，签发可能失败。可先在服务器执行 bt 命令登录。",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.padding(Space.sm)
-                            )
-                        }
-                        Spacer(Modifier.height(Space.sm))
-                    }
-                    LabeledField(
-                        form["domain"].orEmpty(), { form["domain"] = it },
-                        "域名", "每行一个，如 example.com",
-                        singleLine = false
-                    )
-                    Spacer(Modifier.height(Space.sm))
-                    if (vm.sites.isNotEmpty()) {
-                        DropdownField(
-                            value = form["site_id"].orEmpty(),
-                            onValueChange = { form["site_id"] = it },
-                            label = "绑定站点（可选）",
-                            options = listOf("" to "不绑定") + vm.sites.map {
-                                val sid = it["site_id"].asString()
-                                (it["site_name"].asString().ifBlank { sid }) to sid
-                            }
-                        )
-                    } else {
-                        LabeledField(
-                            form["site_id"].orEmpty(), { form["site_id"] = it },
-                            "站点 ID（可选）", "site_info 表的 site_id"
-                        )
+                        if (e == null) { showApply = false; formError = null }
+                        else formError = e
                     }
                 }
+                null
             }
-        )
+        ) {
+            if (vm.btAccountOk == false) {
+                HintText("未检测到宝塔账号登录，签发可能失败。可先在服务器执行 bt 命令登录。", danger = true)
+                Spacer(Modifier.height(Space.sm))
+            }
+            LabeledField(
+                form["domain"].orEmpty(), { form["domain"] = it; formError = null },
+                "域名", "每行一个，如 example.com",
+                singleLine = false
+            )
+            Spacer(Modifier.height(Space.sm))
+            if (vm.sites.isNotEmpty()) {
+                DropdownField(
+                    value = form["site_id"].orEmpty(),
+                    onValueChange = { form["site_id"] = it },
+                    label = "绑定站点（可选）",
+                    options = listOf("不绑定" to "") + vm.sites.map {
+                        val sid = it["site_id"].asString()
+                        (it["site_name"].asString().ifBlank { sid }) to sid
+                    }
+                )
+            } else {
+                LabeledField(
+                    form["site_id"].orEmpty(), { form["site_id"] = it },
+                    "站点 ID（可选）", "site_info 表的 site_id"
+                )
+            }
+        }
     }
 
     /* ── 删除确认 ── */

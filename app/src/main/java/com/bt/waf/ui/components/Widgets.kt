@@ -6,7 +6,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -662,6 +664,112 @@ fun SmallButton(
         modifier = modifier
     ) {
         Text(text, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+    }
+}
+
+/* ══════════════════ 表单弹窗 ══════════════════ */
+
+/**
+ * 统一表单弹窗。
+ *
+ * 存在的理由：aawaf 的写接口失败时把原因放在响应体的 `res` 字段里（HTTP 400/401），
+ * 如果只用 Snackbar 承载错误，弹窗会把它完全遮住 —— 用户点「保存」后看不到任何反馈，
+ * 只能反复重试。因此这里把错误直接渲染在弹窗内部，并保证内容可滚动。
+ *
+ * @param error        错误文案，为 null 时不显示提示条
+ * @param onDismiss    点击遮罩 / 返回键
+ * @param onConfirm    点击「保存」。约定：返回错误文案表示失败（留在弹窗内），返回 null 表示成功（调用方负责关闭）
+ * @param busy         提交中，禁用按钮并显示 loading
+ */
+@Composable
+fun FormDialog(
+    title: String,
+    icon: ImageVector,
+    onDismiss: () -> Unit,
+    onConfirm: () -> String?,
+    confirmText: String = "保存",
+    dismissText: String = "取消",
+    busy: Boolean = false,
+    error: String? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        icon = { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) },
+        title = { Text(title) },
+        text = {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                content()
+                if (!error.isNullOrBlank()) {
+                    Spacer(Modifier.height(Space.md))
+                    Surface(
+                        Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.errorContainer
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = Space.md, vertical = Space.sm),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Filled.ErrorOutline, null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(Space.sm))
+                            Text(
+                                error,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm() },
+                enabled = !busy,
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 20.dp)
+            ) {
+                if (busy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(Modifier.width(Space.sm))
+                }
+                Text(confirmText, style = MaterialTheme.typography.labelLarge)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) { Text(dismissText) }
+        }
+    )
+}
+
+/** 弹窗内的说明条（区别于 [ErrorBanner] 的错误语义）。 */
+@Composable
+fun HintText(text: String, danger: Boolean = false, modifier: Modifier = Modifier) {
+    val bg = if (danger) MaterialTheme.colorScheme.errorContainer
+    else MaterialTheme.colorScheme.surfaceVariant
+    val fg = if (danger) MaterialTheme.colorScheme.onErrorContainer
+    else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), color = bg) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall,
+            color = fg,
+            modifier = Modifier.padding(horizontal = Space.md, vertical = Space.sm)
+        )
     }
 }
 

@@ -26,6 +26,7 @@ class CertViewModel(private val repo: WafRepository) : ViewModel() {
     var certs by mutableStateOf<List<Map<String, Any?>>>(emptyList())
     var sites by mutableStateOf<List<Map<String, Any?>>>(emptyList())
     var loading by mutableStateOf(false)
+    var saving by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
     var message by mutableStateOf<String?>(null)
     var btAccountOk by mutableStateOf<Boolean?>(null)
@@ -52,6 +53,7 @@ class CertViewModel(private val repo: WafRepository) : ViewModel() {
     /** 申请证书：domain 每行一个，传数组。 */
     fun applyCert(domains: List<String>, siteId: String, onResult: (String?) -> Unit) {
         viewModelScope.launch {
+            saving = true
             try {
                 val r = repo.safeCall(
                     "acmesh/apply_cert",
@@ -64,12 +66,15 @@ class CertViewModel(private val repo: WafRepository) : ViewModel() {
                 }
             } catch (e: Exception) {
                 onResult(e.message)
+            } finally {
+                saving = false
             }
         }
     }
 
     fun renewCert(domains: List<String>, siteId: String, onResult: (String?) -> Unit) {
         viewModelScope.launch {
+            saving = true
             try {
                 val r = repo.safeCall(
                     "acmesh/renew_cert",
@@ -82,6 +87,8 @@ class CertViewModel(private val repo: WafRepository) : ViewModel() {
                 }
             } catch (e: Exception) {
                 onResult(e.message)
+            } finally {
+                saving = false
             }
         }
     }

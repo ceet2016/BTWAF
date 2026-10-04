@@ -65,6 +65,7 @@ fun SettingsScreen() {
     val scope = rememberCoroutineScope()
 
     var panel by remember { mutableStateOf(Panel.NONE) }
+    var panelError by remember { mutableStateOf<String?>(null) }
     val bf = remember {
         mutableStateMapOf("title" to "", "domain" to "", "lan" to "zh", "timeout" to "120", "ips" to "")
     }
@@ -121,6 +122,7 @@ fun SettingsScreen() {
     )
 
     fun open(p: Panel) {
+        panelError = null
         when (p) {
             Panel.BASIC -> {
                 bf["title"] = vm.config["title"].asString()
@@ -142,11 +144,24 @@ fun SettingsScreen() {
         panel = p
     }
 
-    fun submit(action: () -> Unit) {
+    /**
+     * 提交一次写操作。
+     *
+     * aawaf 的错误语义是「HTTP 非 2xx + 响应体 res 里写原因」，所以必须等回调回来
+     * 才能判断成败：成功才关弹窗，失败留在原地并把原因显示出来。
+     */
+    fun submit(action: ((String?) -> Unit) -> Unit) {
         saving = true
-        action()
-        panel = Panel.NONE
-        saving = false
+        panelError = null
+        action { err ->
+            saving = false
+            if (err == null) {
+                panel = Panel.NONE
+                scope.launch { snackbar.showSnackbar("设置已保存") }
+            } else {
+                panelError = err
+            }
+        }
     }
 
     Scaffold(
@@ -240,14 +255,32 @@ fun SettingsScreen() {
         Panel.BASIC -> SettingsDialog(
             title = "后台基本信息",
             saving = saving,
-            onDismiss = { panel = Panel.NONE },
+            error = panelError,
+            onDismiss = { panel = Panel.NONE; panelError = null },
             onConfirm = {
-                submit {
-                    vm.setTitle(bf["title"].orEmpty()) {}
-                    vm.setDomain(bf["domain"].orEmpty()) {}
-                    vm.setLanguage(bf["lan"].orEmpty()) {}
-                    vm.setSessionTimeout(bf["timeout"].orEmpty()) {}
-                    vm.setAcceptIp(bf["ips"].orEmpty().split(",").map { it.trim() }.filter { it.isNotBlank() }) {}
+                // 这五项是五个独立接口，串行执行：任一失败即中断并把原因显示在弹窗内
+                val steps: List<((String?) -> Unit) -> Unit> = listOf(
+                    { cb -> vm.setTitle(bf["title"].orEmpty(), cb) },
+                    { cb -> vm.setDomain(bf["domain"].orEmpty(), cb) },
+                    { cb -> vm.setLanguage(bf["lan"].orEmpty(), cb) },
+                    { cb -> vm.setSessionTimeout(bf["timeout"].orEmpty(), cb) },
+                    { cb ->
+                        vm.setAcceptIp(
+                            bf["ips"].orEmpty()
+                                .split(",", "\n", " ").map { it.trim() }.filter { it.isNotEmpty() },
+                            cb
+                        )
+                    }
+                )
+                var idx = 0
+                fun next(cb: (String?) -> Unit) {
+                    if (idx >= steps.size) { cb(null); return }
+                    steps[idx++](cb)
+                }
+                submit { cb ->
+                    next { err ->
+                        if (err != null) cb(err) else next(cb)
+                    }
                 }
             }
         ) {
@@ -276,8 +309,9 @@ fun SettingsScreen() {
         Panel.PWD -> SettingsDialog(
             title = "修改登录密码",
             saving = saving,
-            onDismiss = { panel = Panel.NONE },
-            onConfirm = { submit { vm.updatePassword(pf["pwd"].orEmpty()) {} } }
+            error = panelError,
+            onDismiss = { panel = Panel.NONE; panelError = null },
+            onConfirm = { submit { cb -> vm.updatePassword(pf["pwd"].orEmpty(), cb) } }
         ) {
             LabeledField(
                 pf["pwd"].orEmpty(), { pf["pwd"] = it }, "新密码",
@@ -290,9 +324,10 @@ fun SettingsScreen() {
         Panel.AUTH -> SettingsDialog(
             title = "Basic 认证",
             saving = saving,
-            onDismiss = { panel = Panel.NONE },
+            error = panelError,
+            onDismiss = { panel = Panel.NONE; panelError = null },
             onConfirm = {
-                submit { vm.setBasicAuth(true, af["user"].orEmpty(), af["pwd"].orEmpty()) {} }
+                submit { cb -> vm.setBasicAuth(true, af["user"].orEmpty(), af["pwd"].orEmpty(), cb) }
             }
         ) {
             LabeledField(af["user"].orEmpty(), { af["user"] = it }, "认证用户名")
@@ -305,8 +340,9 @@ fun SettingsScreen() {
         Panel.API -> SettingsDialog(
             title = "开放 API",
             saving = saving,
-            onDismiss = { panel = Panel.NONE },
-            onConfirm = { submit { vm.setOpenApi(3, apiLimit.value) {} } }
+            error = panelError,
+            onDismiss = { panel = Panel.NONE; panelError = null },
+            onConfirm = { submit { cb -> vm.setOpenApi(3, apiLimit.value, cb) } }
         ) {
             LabeledField(
                 apiLimit.value, { apiLimit.value = it }, "限制地址",
@@ -319,21 +355,24 @@ fun SettingsScreen() {
                 SmallButton(
                     text = "切换 API 开关",
                     tone = ChipTone.INFO,
-                    modifier = Modifier.weight(1f)
-                ) { submit { vm.setOpenApi(2) {} } }
+                    modifier = Modifier.weight(1f),
+                    enabled = !saving
+                ) { submit { cb -> vm.setOpenApi(2, "", cb) } }
                 SmallButton(
                     text = "重置 Token",
                     tone = ChipTone.WARNING,
-                    modifier = Modifier.weight(1f)
-                ) { submit { vm.setOpenApi(1) {} } }
+                    modifier = Modifier.weight(1f),
+                    enabled = !saving
+                ) { submit { cb -> vm.setOpenApi(1, "", cb) } }
             }
         }
 
         Panel.ADMIN -> SettingsDialog(
             title = "修改安全入口",
             saving = saving,
-            onDismiss = { panel = Panel.NONE },
-            onConfirm = { submit { vm.setAdminPath(adminPath.value) {} } }
+            error = panelError,
+            onDismiss = { panel = Panel.NONE; panelError = null },
+            onConfirm = { submit { cb -> vm.setAdminPath(adminPath.value, cb) } }
         ) {
             LabeledField(
                 adminPath.value, { adminPath.value = it }, "安全入口路径",
@@ -346,8 +385,9 @@ fun SettingsScreen() {
         Panel.PORT -> SettingsDialog(
             title = "修改后台端口",
             saving = saving,
-            onDismiss = { panel = Panel.NONE },
-            onConfirm = { submit { vm.setPort(portValue.value) {} } }
+            error = panelError,
+            onDismiss = { panel = Panel.NONE; panelError = null },
+            onConfirm = { submit { cb -> vm.setPort(portValue.value, cb) } }
         ) {
             LabeledField(
                 portValue.value, { portValue.value = it }, "端口（1-65535）",
@@ -361,68 +401,59 @@ fun SettingsScreen() {
     }
 }
 
-/** 统一风格的表单弹窗。 */
+/**
+ * 统一风格的表单弹窗。
+ *
+ * aawaf 的写接口失败时把原因放在响应体 `res` 字段（HTTP 400/401），
+ * 若只用 Snackbar 承载，弹窗会把它完全遮住 —— 用户点「保存」后看不到任何反馈。
+ * 因此错误直接渲染在弹窗内部。
+ */
 @Composable
 private fun SettingsDialog(
     title: String,
     saving: Boolean,
+    error: String? = null,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
     AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Filled.Settings, null) },
+        onDismissRequest = { if (!saving) onDismiss() },
+        icon = { Icon(Icons.Filled.Settings, null, tint = MaterialTheme.colorScheme.primary) },
         title = { Text(title) },
         text = {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 400.dp)
+                    .heightIn(max = 420.dp)
                     .verticalScroll(rememberScrollState())
-            ) { content() }
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm, enabled = !saving) {
-                if (saving) {
-                    CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                } else {
-                    Text("保存")
+            ) {
+                content()
+                if (!error.isNullOrBlank()) {
+                    Spacer(Modifier.height(Space.md))
+                    ErrorBanner(error)
                 }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = !saving,
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 20.dp)
+            ) {
+                if (saving) {
+                    CircularProgressIndicator(
+                        Modifier.size(14.dp), strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(Modifier.width(Space.sm))
+                }
+                Text("保存", style = MaterialTheme.typography.labelLarge)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !saving) { Text("取消") } }
     )
-}
-
-/** 弹窗内的说明文字。 */
-@Composable
-private fun HintText(text: String, danger: Boolean = false) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(
-                if (danger) MaterialTheme.colorScheme.errorContainer
-                else MaterialTheme.colorScheme.surfaceVariant
-            )
-            .padding(Space.sm)
-    ) {
-        Icon(
-            if (danger) Icons.Filled.Warning else Icons.Filled.Info,
-            null,
-            tint = if (danger) MaterialTheme.colorScheme.onErrorContainer
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(Modifier.width(Space.sm))
-        Text(
-            text,
-            style = MaterialTheme.typography.bodySmall,
-            color = if (danger) MaterialTheme.colorScheme.onErrorContainer
-            else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
 }
 
 private fun boolText(v: Any?): String = when (v?.toString()?.lowercase()) {

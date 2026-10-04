@@ -51,6 +51,8 @@ fun SitesScreen() {
     var siteLogs by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var siteSsl by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var tabLoading by remember { mutableStateOf(false) }
+    var createErr by remember { mutableStateOf<String?>(null) }
+    var creating by remember { mutableStateOf(false) }
     val cf = remember {
         mutableStateMapOf("site_name" to "", "port" to "80", "server_ip" to "")
     }
@@ -129,54 +131,52 @@ fun SitesScreen() {
 
     // ── 新增站点 ──
     if (showCreate) {
-        AlertDialog(
-            onDismissRequest = { showCreate = false },
-            icon = { Icon(Icons.Filled.AddLink, null) },
-            title = { Text("新增防护网站") },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    Text(
-                        "填写域名与源站地址，WAF 会在流量回源前先做一次安全过滤。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(Space.md))
-                    LabeledField(
-                        value = cf["site_name"].orEmpty(),
-                        onValueChange = { cf["site_name"] = it },
-                        label = "站点域名",
-                        hint = "example.com"
-                    )
-                    Spacer(Modifier.height(Space.sm))
-                    LabeledField(
-                        value = cf["port"].orEmpty(),
-                        onValueChange = { cf["port"] = it },
-                        label = "源站端口",
-                        hint = "80",
-                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                    )
-                    Spacer(Modifier.height(Space.sm))
-                    LabeledField(
-                        value = cf["server_ip"].orEmpty(),
-                        onValueChange = { cf["server_ip"] = it },
-                        label = "源站地址",
-                        hint = "127.0.0.1 或 10.0.0.5:8080"
-                    )
+        FormDialog(
+            title = "新增防护网站",
+            icon = Icons.Filled.AddLink,
+            confirmText = "创建",
+            busy = creating,
+            error = createErr,
+            onDismiss = { showCreate = false; createErr = null },
+            onConfirm = {
+                val name = cf["site_name"].orEmpty()
+                if (name.isBlank()) {
+                    createErr = "请填写站点域名"
+                } else {
+                    creating = true
+                    createErr = null
+                    vm.create(name, cf["port"].orEmpty(), cf["server_ip"].orEmpty()) { err ->
+                        creating = false
+                        if (err == null) { showCreate = false; toast("站点已创建") } else createErr = err
+                    }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (cf["site_name"].isNullOrBlank()) {
-                        toast("请填写站点域名")
-                        return@TextButton
-                    }
-                    vm.create(cf["site_name"].orEmpty(), cf["port"].orEmpty(), cf["server_ip"].orEmpty()) { err ->
-                        if (err == null) { showCreate = false; toast("站点已创建") } else vm.error = err
-                    }
-                }) { Text("创建") }
-            },
-            dismissButton = { TextButton(onClick = { showCreate = false }) { Text("取消") } }
-        )
+                null
+            }
+        ) {
+            HintText("填写域名与源站地址，WAF 会在流量回源前先做一次安全过滤。")
+            Spacer(Modifier.height(Space.md))
+            LabeledField(
+                value = cf["site_name"].orEmpty(),
+                onValueChange = { cf["site_name"] = it; createErr = null },
+                label = "站点域名",
+                hint = "example.com"
+            )
+            Spacer(Modifier.height(Space.sm))
+            LabeledField(
+                value = cf["port"].orEmpty(),
+                onValueChange = { cf["port"] = it },
+                label = "源站端口",
+                hint = "80",
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+            )
+            Spacer(Modifier.height(Space.sm))
+            LabeledField(
+                value = cf["server_ip"].orEmpty(),
+                onValueChange = { cf["server_ip"] = it },
+                label = "源站地址",
+                hint = "127.0.0.1 或 10.0.0.5:8080"
+            )
+        }
     }
 
     // ── 删除确认 ──

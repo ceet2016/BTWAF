@@ -51,11 +51,15 @@ fun ReplaceScreen() {
     var showAdd by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<Map<String, Any?>?>(null) }
     var deleteTarget by remember { mutableStateOf<Map<String, Any?>?>(null) }
+    var formError by remember { mutableStateOf<String?>(null) }
     val form = remember { mutableStateMapOf("type" to MATCH_SITE, "keyward" to "", "reValue" to "") }
 
     LaunchedEffect(Unit) { vm.loadSites(); vm.loadRules() }
     LaunchedEffect(vm.message) {
         vm.message?.let {
+            showAdd = false
+            editTarget = null
+            formError = null
             scope.launch { snackbar.showSnackbar(it) }
             vm.consumeMessage()
         }
@@ -332,72 +336,50 @@ fun ReplaceScreen() {
     // 新增 / 编辑规则
     if (showAdd || editTarget != null) {
         val isEdit = editTarget != null
-        AlertDialog(
-            onDismissRequest = { showAdd = false; editTarget = null },
-            icon = { Icon(if (isEdit) Icons.Filled.Edit else Icons.Filled.Add, null) },
-            title = { Text(if (isEdit) "编辑替换规则" else "新增替换规则") },
-            text = {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    DropdownField(
-                        value = form["type"].orEmpty(),
-                        onValueChange = { form["type"] = it },
-                        label = "生效范围",
-                        options = listOf(
-                            "全站（所有响应）" to MATCH_SITE,
-                            "限定 URI" to MATCH_URI
-                        )
-                    )
-                    Spacer(Modifier.height(Space.sm))
-                    LabeledField(
-                        value = form["keyward"].orEmpty(),
-                        onValueChange = { form["keyward"] = it },
-                        label = "关键词",
-                        hint = "要被替换的原文"
-                    )
-                    Spacer(Modifier.height(Space.sm))
-                    LabeledField(
-                        value = form["reValue"].orEmpty(),
-                        onValueChange = { form["reValue"] = it },
-                        label = "替换为",
-                        hint = "留空表示删除该关键词"
-                    )
-                    if (form["type"] == MATCH_URI) {
-                        Spacer(Modifier.height(Space.sm))
-                        Text(
-                            "限定 URI 的规则需要在编辑时补充具体路径；此处先用关键词匹配全站。",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !vm.saving,
-                    onClick = {
-                        val kw = form["keyward"].orEmpty()
-                        val rv = form["reValue"].orEmpty()
-                        val cb: (String?) -> Unit = { e ->
-                            if (e != null) toast(e) else { showAdd = false; editTarget = null }
-                        }
-                        val t = editTarget
-                        if (t != null) {
-                            vm.updateRule(t, kw, rv, cb)
-                        } else {
-                            vm.addRule(form["type"].orEmpty(), kw, rv, cb)
-                        }
-                    }
-                ) { Text("保存") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAdd = false; editTarget = null }) { Text("取消") }
+        FormDialog(
+            title = if (isEdit) "编辑替换规则" else "新增替换规则",
+            icon = if (isEdit) Icons.Filled.Edit else Icons.Filled.Add,
+            busy = vm.saving,
+            error = formError,
+            onDismiss = { showAdd = false; editTarget = null; formError = null },
+            onConfirm = {
+                val kw = form["keyward"].orEmpty()
+                val rv = form["reValue"].orEmpty()
+                val fail: (String?) -> Unit = { e -> formError = e }
+                val t = editTarget
+                if (t != null) vm.updateRule(t, kw, rv, fail)
+                else vm.addRule(form["type"].orEmpty(), kw, rv, fail)
+                null
             }
-        )
+        ) {
+            DropdownField(
+                value = form["type"].orEmpty(),
+                onValueChange = { form["type"] = it; formError = null },
+                label = "生效范围",
+                options = listOf(
+                    "全站（所有响应）" to MATCH_SITE,
+                    "限定 URI" to MATCH_URI
+                )
+            )
+            Spacer(Modifier.height(Space.sm))
+            LabeledField(
+                value = form["keyward"].orEmpty(),
+                onValueChange = { form["keyward"] = it; formError = null },
+                label = "关键词",
+                hint = "要被替换的原文"
+            )
+            Spacer(Modifier.height(Space.sm))
+            LabeledField(
+                value = form["reValue"].orEmpty(),
+                onValueChange = { form["reValue"] = it; formError = null },
+                label = "替换为",
+                hint = "留空表示删除该关键词"
+            )
+            if (form["type"] == MATCH_URI) {
+                Spacer(Modifier.height(Space.sm))
+                HintText("限定 URI 的规则需要在编辑时补充具体路径；此处先用关键词匹配全站。")
+            }
+        }
     }
 
     // 删除确认

@@ -84,6 +84,7 @@ fun NotificationsScreen() {
 
     var editing by remember { mutableStateOf<Map<String, Any?>?>(null) }
     var clearTarget by remember { mutableStateOf<Map<String, Any?>?>(null) }
+    var formError by remember { mutableStateOf<String?>(null) }
     val values = remember { mutableStateMapOf<String, String>() }
     var saving by remember { mutableStateOf(false) }
 
@@ -218,55 +219,50 @@ fun NotificationsScreen() {
     editing?.let { ch ->
         val type = ch["type"].asString()
         val meta = metaOf(type)
-        AlertDialog(
-            onDismissRequest = { editing = null },
-            icon = { Icon(meta.icon, null, tint = meta.tint) },
-            title = { Text("配置 ${ch["name"].asString().ifBlank { type }}") },
-            text = {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    meta.fields.forEach { (k, label) ->
-                        Spacer(Modifier.height(Space.sm))
-                        LabeledField(
-                            value = values[k].orEmpty(),
-                            onValueChange = { values[k] = it },
-                            label = label,
-                            isPassword = k == "password",
-                            singleLine = k != "receivers"
-                        )
+        FormDialog(
+            title = "配置 ${ch["name"].asString().ifBlank { type }}",
+            icon = meta.icon,
+            busy = saving,
+            error = formError,
+            onDismiss = { editing = null; formError = null },
+            onConfirm = {
+                saving = true
+                formError = null
+                val cfg = HashMap<String, Any?>()
+                meta.fields.forEach { (k, _) ->
+                    cfg[k] = if (k == "receivers") {
+                        values[k].orEmpty()
+                            .split(",", "\n", ";")
+                            .map { it.trim() }.filter { it.isNotEmpty() }
+                    } else {
+                        values[k].orEmpty()
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !saving,
-                    onClick = {
-                        saving = true
-                        val cfg = HashMap<String, Any?>()
-                        meta.fields.forEach { (k, _) ->
-                            cfg[k] = if (k == "receivers") {
-                                values[k].orEmpty().split(",").map { it.trim() }.filter { it.isNotBlank() }
-                            } else {
-                                values[k].orEmpty()
-                            }
-                        }
-                        vm.save(type, cfg) { e ->
-                            saving = false
-                            editing = null
-                            if (e != null) vm.error = e
-                        }
-                    }
-                ) {
-                    if (saving) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                    else Text("保存")
+                vm.save(type, cfg) { e ->
+                    saving = false
+                    if (e == null) editing = null else formError = e
                 }
-            },
-            dismissButton = { TextButton(onClick = { editing = null }) { Text("取消") } }
-        )
+                null
+            }
+        ) {
+            meta.fields.forEach { (k, label) ->
+                Spacer(Modifier.height(Space.sm))
+                LabeledField(
+                    value = values[k].orEmpty(),
+                    onValueChange = { values[k] = it; formError = null },
+                    label = label,
+                    isPassword = k == "password",
+                    singleLine = k != "receivers"
+                )
+            }
+            if (type == "email") {
+                Spacer(Modifier.height(Space.sm))
+                HintText("收件人用英文逗号分隔；需确保 WAF 所在服务器能外发 SMTP 邮件。")
+            } else {
+                Spacer(Modifier.height(Space.sm))
+                HintText("填写机器人 Webhook 地址，形如 https://oapi.dingtalk.com/robot/send?access_token=xxx")
+            }
+        }
     }
 
     // 清除确认

@@ -50,6 +50,7 @@ fun ProfileScreen() {
     var showPwd by remember { mutableStateOf(false) }
     var showName by remember { mutableStateOf(false) }
     var showRestart by remember { mutableStateOf(false) }
+    var formError by remember { mutableStateOf<String?>(null) }
     val pwd = remember { mutableStateOf("") }
     val name = remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -240,65 +241,56 @@ fun ProfileScreen() {
 
     // 修改账号
     if (showName) {
-        AlertDialog(
-            onDismissRequest = { showName = false },
-            icon = { Icon(Icons.Filled.Badge, null) },
-            title = { Text("修改账号") },
-            text = {
-                Column {
-                    LabeledField(name.value, { name.value = it }, "新账号名")
-                    Spacer(Modifier.height(Space.sm))
-                    Text(
-                        "修改后当前登录会话可能失效，需要用新账号重新登录。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val n = name.value
-                    vm.updateUsername(n) { e ->
+        FormDialog(
+            title = "修改账号",
+            icon = Icons.Filled.Badge,
+            error = formError,
+            onDismiss = { showName = false; formError = null },
+            onConfirm = {
+                val n = name.value
+                vm.updateUsername(n) { e ->
+                    if (e == null) {
                         showName = false
-                        toast(e ?: "账号已更新为 $n")
+                        formError = null
+                        toast("账号已更新为 $n")
+                    } else {
+                        formError = e
                     }
-                }) { Text("保存") }
-            },
-            dismissButton = { TextButton(onClick = { showName = false }) { Text("取消") } }
-        )
+                }
+                null
+            }
+        ) {
+            LabeledField(name.value, { name.value = it; formError = null }, "新账号名")
+            Spacer(Modifier.height(Space.sm))
+            HintText("修改后当前登录会话可能失效，需要用新账号重新登录。")
+        }
     }
 
     // 修改密码
     if (showPwd) {
-        AlertDialog(
-            onDismissRequest = { showPwd = false },
-            icon = { Icon(Icons.Filled.Lock, null) },
-            title = { Text("修改密码") },
-            text = {
-                Column {
-                    LabeledField(pwd.value, { pwd.value = it }, "新密码", isPassword = true)
-                    Spacer(Modifier.height(Space.sm))
-                    Text(
-                        "密码需满足后台复杂度要求，修改后立即生效。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = pwd.value.isNotBlank(),
-                    onClick = {
-                        vm.updatePassword(pwd.value) { e ->
-                            showPwd = false
-                            pwd.value = ""
-                            toast(e ?: "密码已修改")
-                        }
+        FormDialog(
+            title = "修改密码",
+            icon = Icons.Filled.Lock,
+            error = formError,
+            onDismiss = { showPwd = false; formError = null },
+            onConfirm = {
+                vm.updatePassword(pwd.value) { e ->
+                    if (e == null) {
+                        showPwd = false
+                        pwd.value = ""
+                        formError = null
+                        toast("密码已修改")
+                    } else {
+                        formError = e
                     }
-                ) { Text("保存") }
-            },
-            dismissButton = { TextButton(onClick = { showPwd = false }) { Text("取消") } }
-        )
+                }
+                null
+            }
+        ) {
+            LabeledField(pwd.value, { pwd.value = it; formError = null }, "新密码", isPassword = true)
+            Spacer(Modifier.height(Space.sm))
+            HintText("密码需满足后台复杂度要求，修改后立即生效。")
+        }
     }
 
     // 重启确认

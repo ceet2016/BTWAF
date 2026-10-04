@@ -42,11 +42,14 @@ fun IpGroupScreen() {
     var editing by remember { mutableStateOf<String?>(null) }
     var deleteTarget by remember { mutableStateOf<String?>(null) }
     var expanded by remember { mutableStateOf<String?>(null) }
+    var formError by remember { mutableStateOf<String?>(null) }
     val form = remember { mutableStateMapOf("name" to "", "ips" to "") }
 
     LaunchedEffect(Unit) { vm.load() }
     LaunchedEffect(vm.message) {
         vm.message?.let {
+            editing = null
+            formError = null
             scope.launch { snackbar.showSnackbar(it) }
             vm.consumeMessage()
         }
@@ -208,54 +211,42 @@ fun IpGroupScreen() {
     // 新建 / 编辑
     if (editing != null) {
         val isNew = editing!!.isEmpty()
-        AlertDialog(
-            onDismissRequest = { editing = null },
-            icon = { Icon(if (isNew) Icons.Filled.CreateNewFolder else Icons.Filled.Edit, null) },
-            title = { Text(if (isNew) "新建 IP 分组" else "编辑分组") },
-            text = {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    LabeledField(
-                        value = form["name"].orEmpty(),
-                        onValueChange = { form["name"] = it },
-                        label = "分组名称",
-                        hint = "如 机房A",
-                        enabled = isNew
-                    )
-                    Spacer(Modifier.height(Space.sm))
-                    LabeledField(
-                        value = form["ips"].orEmpty(),
-                        onValueChange = { form["ips"] = it },
-                        label = "IP 列表",
-                        hint = "每行一个，支持 IP 或 CIDR 网段",
-                        singleLine = false
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !vm.saving,
-                    onClick = {
-                        val ips = form["ips"].orEmpty()
-                            .split("\n").map { it.trim() }.filter { it.isNotEmpty() }
-                        val n = form["name"].orEmpty().trim()
-                        val cb: (String?) -> Unit = { e ->
-                            if (e != null) {
-                                scope.launch { snackbar.showSnackbar(e) }
-                            } else {
-                                editing = null
-                            }
-                        }
-                        if (isNew) vm.create(n, ips, cb) else vm.update(n, ips, cb)
-                    }
-                ) { Text("保存") }
-            },
-            dismissButton = { TextButton(onClick = { editing = null }) { Text("取消") } }
-        )
+        FormDialog(
+            title = if (isNew) "新建 IP 分组" else "编辑分组",
+            icon = if (isNew) Icons.Filled.CreateNewFolder else Icons.Filled.Edit,
+            busy = vm.saving,
+            error = formError,
+            onDismiss = { editing = null; formError = null },
+            onConfirm = {
+                // 兼容三种分隔：换行、逗号、空格/分号/tab
+                val ips = form["ips"].orEmpty()
+                    .split('\n', ',', ' ', ';', '\t')
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                val n = form["name"].orEmpty().trim()
+                val fail: (String?) -> Unit = { e -> formError = e }
+                if (isNew) vm.create(n, ips, fail) else vm.update(n, ips, fail)
+                null
+            }
+        ) {
+            LabeledField(
+                value = form["name"].orEmpty(),
+                onValueChange = { form["name"] = it; formError = null },
+                label = "分组名称",
+                hint = "如 机房A",
+                enabled = isNew
+            )
+            Spacer(Modifier.height(Space.sm))
+            LabeledField(
+                value = form["ips"].orEmpty(),
+                onValueChange = { form["ips"] = it; formError = null },
+                label = "IP 列表",
+                hint = "多个 IP 用换行、逗号或空格分隔，支持 CIDR 网段",
+                singleLine = false
+            )
+            Spacer(Modifier.height(Space.sm))
+            HintText("保存后可在黑白名单 / 人机验证规则里以「匹配ip组-分组名」引用该分组。")
+        }
     }
 
     // 删除确认

@@ -288,56 +288,41 @@ fun ManagedListScreen(config: ListConfig) {
 
     /* ── 新增弹窗 ── */
     if (showCreate) {
-        AlertDialog(
-            onDismissRequest = { if (!creating) showCreate = false },
-            confirmButton = {
-                TextButton(
-                    enabled = !creating,
-                    onClick = {
-                        creating = true
-                        vm.create(fieldValues.toMap()) { err ->
-                            creating = false
-                            if (err == null) showCreate = false else createErr = err
-                        }
-                    }
-                ) { Text("确定") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCreate = false }, enabled = !creating) { Text("取消") }
-            },
-            title = { Text("新增 · ${config.title}") },
-            text = {
-                Column(Modifier.fillMaxWidth().heightIn(max = 380.dp)) {
-                    Column(Modifier.verticalScroll(rememberScrollState())) {
-                        config.createFields.forEach { f ->
-                            Spacer(Modifier.height(Space.sm))
-                            if (f.options != null) {
-                                DropdownField(
-                                    fieldValues[f.key] ?: f.defaultValue,
-                                    { fieldValues[f.key] = it },
-                                    f.label, f.options
-                                )
-                            } else {
-                                LabeledField(
-                                    fieldValues[f.key] ?: f.defaultValue,
-                                    { fieldValues[f.key] = it },
-                                    f.label, f.hint,
-                                    singleLine = !f.multiline
-                                )
-                            }
-                        }
-                    }
-                    if (createErr != null) {
-                        Spacer(Modifier.height(Space.sm))
-                        Text(
-                            createErr!!,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
+        FormDialog(
+            title = "新增 · ${config.title}",
+            icon = Icons.Filled.Add,
+            confirmText = "确定",
+            busy = creating,
+            error = createErr,
+            onDismiss = { if (!creating) { showCreate = false; createErr = null } },
+            onConfirm = {
+                creating = true
+                createErr = null
+                vm.create(fieldValues.toMap()) { err ->
+                    creating = false
+                    if (err == null) showCreate = false else createErr = err
+                }
+                null
+            }
+        ) {
+            config.createFields.forEach { f ->
+                Spacer(Modifier.height(Space.sm))
+                if (f.options != null) {
+                    DropdownField(
+                        fieldValues[f.key] ?: f.defaultValue,
+                        { fieldValues[f.key] = it },
+                        f.label, f.options
+                    )
+                } else {
+                    LabeledField(
+                        fieldValues[f.key] ?: f.defaultValue,
+                        { fieldValues[f.key] = it; createErr = null },
+                        f.label, f.hint,
+                        singleLine = !f.multiline
+                    )
                 }
             }
-        )
+        }
     }
 
     /* ── 删除确认 ── */
