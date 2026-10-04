@@ -1,35 +1,84 @@
 package com.bt.waf.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bt.waf.WafApplication
 import com.bt.waf.ui.components.*
 import com.bt.waf.ui.model.ListConfig
-import com.bt.waf.util.asString
+import com.bt.waf.ui.theme.Space
 import com.bt.waf.util.pickString
 import com.bt.waf.viewmodel.ManagedListViewModel
 import com.bt.waf.viewmodel.WafViewModelFactory
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
-/** 后端开关字段写法不统一（布尔 / 数字 / 字符串），统一在此判定。 */
-private fun isToggleOn(v: Any?): Boolean = when (v) {
-    null -> false
-    is Boolean -> v
-    is Number -> v.toInt() == 1
-    else -> v.asString() == "1" || v.asString().equals("true", true)
+/** 列表项右下角的操作区：启停开关 + 更多菜单。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RowActions(
+    config: ListConfig,
+    enabled: Boolean,
+    onToggle: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
+    onDetail: (() -> Unit)?
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (onToggle != null) {
+            Switch(checked = enabled, onCheckedChange = { onToggle() })
+        }
+        if (onDelete != null || onDetail != null) {
+            var menu by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Filled.MoreVert, contentDescription = "更多", modifier = Modifier.size(20.dp))
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    if (onDetail != null) {
+                        DropdownMenuItem(
+                            text = { Text("查看详情") },
+                            leadingIcon = { Icon(Icons.Filled.Visibility, null, Modifier.size(18.dp)) },
+                            onClick = { menu = false; onDetail() }
+                        )
+                    }
+                    if (onDelete != null) {
+                        DropdownMenuItem(
+                            text = { Text("删除", color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Filled.Delete, null, Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            },
+                            onClick = { menu = false; onDelete() }
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,70 +86,198 @@ private fun isToggleOn(v: Any?): Boolean = when (v) {
 fun ManagedListScreen(config: ListConfig) {
     val ctx = LocalContext.current
     val repo = (ctx.applicationContext as WafApplication).repository
-    val vm: ManagedListViewModel = viewModel(factory = WafViewModelFactory(repo, config))
+    val vm: ManagedListViewModel = viewModel(
+        key = "list_${config.key}",
+        factory = WafViewModelFactory(repo, config)
+    )
+    val listState = rememberLazyListState()
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val keyboard = LocalSoftwareKeyboardController.current
 
     var showCreate by remember { mutableStateOf(false) }
-    var deleteTarget by remember { mutableStateOf<Map<String, Any?>?>(null) }
+    var deleteIndex by remember { mutableStateOf(-1) }
+    var detailItem by remember { mutableStateOf<Map<String, Any?>?>(null) }
+    var clearConfirm by remember { mutableStateOf(false) }
     var createErr by remember { mutableStateOf<String?>(null) }
+    var creating by remember { mutableStateOf(false) }
     val fieldValues = remember { mutableStateMapOf<String, String>() }
 
     LaunchedEffect(config.key) { vm.load() }
 
+    // 触底自动加载下一页
+    LaunchedEffect(listState, vm.items.size) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
+            .collect { last ->
+                if (last >= vm.items.size - 3 && vm.items.isNotEmpty()) vm.loadMore()
+            }
+    }
+
+    LaunchedEffect(vm.message) {
+        vm.message?.let {
+            snackbar.showSnackbar(it)
+            vm.consumeMessage()
+        }
+    }
+
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
             if (config.createPath != null) {
-                FloatingActionButton(onClick = {
-                    fieldValues.clear()
-                    config.createFields.forEach { fieldValues[it.key] = it.defaultValue }
-                    createErr = null
-                    showCreate = true
-                }) { Icon(Icons.Filled.Add, contentDescription = "新增") }
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        fieldValues.clear()
+                        config.createFields.forEach { fieldValues[it.key] = it.defaultValue }
+                        createErr = null
+                        showCreate = true
+                    },
+                    icon = { Icon(Icons.Filled.Add, null) },
+                    text = { Text("新增") }
+                )
             }
         }
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
-            if (config.keywordSearch) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    LabeledField(vm.keyword, { vm.keyword = it }, "搜索", modifier = Modifier.weight(1f))
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = { vm.load() }) { Text("搜索") }
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            // ── 顶部工具条 ──
+            Column(Modifier.padding(horizontal = Space.lg, vertical = Space.sm)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = vm.keyword,
+                        onValueChange = { vm.keyword = it },
+                        placeholder = { Text("搜索…", style = MaterialTheme.typography.bodySmall) },
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Filled.Search, null, Modifier.size(18.dp)) },
+                        trailingIcon = {
+                            if (vm.keyword.isNotEmpty()) {
+                                IconButton(onClick = { vm.keyword = ""; vm.load() }) {
+                                    Icon(Icons.Filled.Close, "清空", Modifier.size(16.dp))
+                                }
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = {
+                            keyboard?.hide(); vm.load()
+                        }),
+                        shape = RoundedCornerShape(10.dp),
+                        textStyle = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp)
+                    )
+                    Spacer(Modifier.width(Space.sm))
+                    FilledTonalIconButton(
+                        onClick = { keyboard?.hide(); vm.load() },
+                        modifier = Modifier.size(52.dp)
+                    ) { Icon(Icons.Filled.Search, contentDescription = "搜索") }
+                    if (config.clearPath != null) {
+                        Spacer(Modifier.width(Space.xs))
+                        FilledTonalIconButton(
+                            onClick = { clearConfirm = true },
+                            modifier = Modifier.size(52.dp),
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) { Icon(Icons.Filled.DeleteSweep, contentDescription = "清空") }
+                    }
+                }
+                if (config.dateFilter) {
+                    Spacer(Modifier.height(Space.sm))
+                    DateRangeChips(
+                        selected = vm.dateRange,
+                        onSelect = { vm.dateRange = it; vm.load() }
+                    )
                 }
             }
-            ErrorText(vm.error)
-            if (vm.loading) CenteredProgress()
-            else if (vm.items.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("暂无数据", color = MaterialTheme.colorScheme.outline)
-                }
-            } else {
-                LazyColumn {
-                    items(vm.items) { item ->
-                        val title = pickString(item, *config.titleKeys.toTypedArray())
-                        val sub = pickString(item, *config.subtitleKeys.toTypedArray())
-                        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                            Row(
-                                Modifier.fillMaxWidth().padding(12.dp).clickable {
-                                    // 点击暂不展开，避免误触；删除/启停用按钮
-                                },
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(title.ifBlank { "(无标题)" }, style = MaterialTheme.typography.bodyMedium)
-                                    if (sub.isNotBlank()) {
-                                        Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+
+            LoadingBar(vm.loading)
+
+            ErrorBanner(vm.error) { vm.load() }
+
+            Box(Modifier.fillMaxSize()) {
+                when {
+                    vm.loading && vm.items.isEmpty() -> CircularProgressIndicator(
+                        Modifier.align(Alignment.Center)
+                    )
+
+                    vm.items.isEmpty() -> EmptyState(
+                        icon = Icons.Filled.Inbox,
+                        title = "暂无数据",
+                        description = if (vm.error != null) "接口返回异常，请点击重试"
+                        else "该模块当前没有记录",
+                        actionText = if (vm.error != null) "重试" else null,
+                        onAction = { vm.load() }
+                    )
+
+                    else -> LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(
+                            start = Space.lg, end = Space.lg,
+                            top = Space.xs, bottom = 88.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(Space.sm)
+                    ) {
+                        items(vm.items.size) { idx ->
+                            val item = vm.items[idx]
+                            val title = pickString(item, *config.titleKeys.toTypedArray())
+                            val sub = pickString(item, *config.subtitleKeys.toTypedArray())
+                            val on = item[config.toggleStateKey].toBoolState()
+                            WafCard {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            title.ifBlank { "(无标题)" },
+                                            style = MaterialTheme.typography.titleSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        if (sub.isNotBlank()) {
+                                            Spacer(Modifier.height(2.dp))
+                                            Text(
+                                                sub,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        if (config.togglePath != null) {
+                                            Spacer(Modifier.height(Space.xs))
+                                            StatusChip(
+                                                if (on) "已启用" else "已停用",
+                                                if (on) ChipTone.SUCCESS else ChipTone.NEUTRAL
+                                            )
+                                        }
                                     }
-                                }
-                                if (config.togglePath != null) {
-                                    Switch(
-                                        checked = isToggleOn(item[config.toggleStateKey]),
-                                        onCheckedChange = { vm.toggle(item) { err -> if (err != null) vm.error = err } }
+                                    RowActions(
+                                        config = config,
+                                        enabled = on,
+                                        onToggle = if (config.togglePath != null) {
+                                            { vm.toggle(idx) { e -> if (e != null) vm.error = e } }
+                                        } else null,
+                                        onDelete = if (config.deletePath != null) {
+                                            { deleteIndex = idx }
+                                        } else null,
+                                        onDetail = { detailItem = item }
                                     )
                                 }
-                                if (config.deletePath != null) {
-                                    IconButton(onClick = { deleteTarget = item }) {
-                                        Icon(Icons.Filled.Delete, contentDescription = "删除")
-                                    }
+                            }
+                        }
+                        if (vm.loadingMore) {
+                            item {
+                                Box(Modifier.fillMaxWidth().padding(Space.md), Alignment.Center) {
+                                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                                 }
+                            }
+                        } else if (!vm.hasMore && vm.items.isNotEmpty()) {
+                            item {
+                                Text(
+                                    "— 共 ${vm.total} 条，已全部加载 —",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = Space.lg),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
                             }
                         }
                     }
@@ -109,45 +286,142 @@ fun ManagedListScreen(config: ListConfig) {
         }
     }
 
+    /* ── 新增弹窗 ── */
     if (showCreate) {
         AlertDialog(
-            onDismissRequest = { showCreate = false },
+            onDismissRequest = { if (!creating) showCreate = false },
             confirmButton = {
-                TextButton(onClick = {
-                    vm.create(fieldValues.toMap()) { err ->
-                        if (err == null) showCreate = false else createErr = err
-                    }
-                }) { Text("确定") }
-            },
-            dismissButton = { TextButton(onClick = { showCreate = false }) { Text("取消") } },
-            title = { Text("新增 · ${config.title}") },
-            text = {
-                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                    config.createFields.forEach { f ->
-                        Spacer(Modifier.height(8.dp))
-                        if (f.options != null) {
-                            DropdownField(fieldValues[f.key] ?: f.defaultValue, { fieldValues[f.key] = it }, f.label, f.options)
-                        } else {
-                            LabeledField(fieldValues[f.key] ?: f.defaultValue, { fieldValues[f.key] = it }, f.label, f.hint)
+                TextButton(
+                    enabled = !creating,
+                    onClick = {
+                        creating = true
+                        vm.create(fieldValues.toMap()) { err ->
+                            creating = false
+                            if (err == null) showCreate = false else createErr = err
                         }
                     }
-                    ErrorText(createErr)
+                ) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreate = false }, enabled = !creating) { Text("取消") }
+            },
+            title = { Text("新增 · ${config.title}") },
+            text = {
+                Column(Modifier.fillMaxWidth().heightIn(max = 380.dp)) {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        config.createFields.forEach { f ->
+                            Spacer(Modifier.height(Space.sm))
+                            if (f.options != null) {
+                                DropdownField(
+                                    fieldValues[f.key] ?: f.defaultValue,
+                                    { fieldValues[f.key] = it },
+                                    f.label, f.options
+                                )
+                            } else {
+                                LabeledField(
+                                    fieldValues[f.key] ?: f.defaultValue,
+                                    { fieldValues[f.key] = it },
+                                    f.label, f.hint,
+                                    singleLine = !f.multiline
+                                )
+                            }
+                        }
+                    }
+                    if (createErr != null) {
+                        Spacer(Modifier.height(Space.sm))
+                        Text(
+                            createErr!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         )
     }
 
-    deleteTarget?.let { item ->
+    /* ── 删除确认 ── */
+    if (deleteIndex >= 0 && deleteIndex < vm.items.size) {
+        val item = vm.items[deleteIndex]
         AlertDialog(
-            onDismissRequest = { deleteTarget = null },
+            onDismissRequest = { deleteIndex = -1 },
             confirmButton = {
                 TextButton(onClick = {
-                    vm.delete(item) { err -> deleteTarget = null; if (err != null) vm.error = err }
-                }) { Text("删除") }
+                    vm.delete(deleteIndex) { e -> deleteIndex = -1; if (e != null) vm.error = e }
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { deleteIndex = -1 }) { Text("取消") } },
             title = { Text("确认删除") },
-            text = { Text(pickString(item, *config.titleKeys.toTypedArray()).ifBlank { "该条目" }) }
+            text = {
+                Text(
+                    pickString(item, *config.titleKeys.toTypedArray()).ifBlank { "该条目" },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            icon = { Icon(Icons.Filled.Warning, null, tint = MaterialTheme.colorScheme.error) }
         )
+    }
+
+    /* ── 清空确认 ── */
+    if (clearConfirm) {
+        AlertDialog(
+            onDismissRequest = { clearConfirm = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    clearConfirm = false
+                    vm.clear { e -> vm.error = e ?: "已清空" }
+                }) { Text("确认清空", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { clearConfirm = false }) { Text("取消") } },
+            title = { Text("确认清空${config.title}") },
+            text = { Text("该操作不可恢复，确定要清空全部记录吗？", style = MaterialTheme.typography.bodyMedium) },
+            icon = { Icon(Icons.Filled.DeleteSweep, null, tint = MaterialTheme.colorScheme.error) }
+        )
+    }
+
+    /* ── 详情弹窗 ── */
+    detailItem?.let { item ->
+        AlertDialog(
+            onDismissRequest = { detailItem = null },
+            confirmButton = { TextButton(onClick = { detailItem = null }) { Text("关闭") } },
+            title = {
+                Text(
+                    pickString(item, *config.titleKeys.toTypedArray()).ifBlank { "详情" },
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+            },
+            text = {
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
+                    items(item.entries.size) { i ->
+                        val e = item.entries.toList()[i]
+                        DataRowDivider(e.key, e.value.toString())
+                    }
+                }
+            }
+        )
+    }
+}
+
+/** 日期范围快捷筛选 chips。 */
+@Composable
+private fun DateRangeChips(selected: String, onSelect: (String) -> Unit) {
+    val today = remember {
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            .format(java.util.Date())
+    }
+    val yesterday = remember {
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            .format(java.util.Date(System.currentTimeMillis() - 86400_000L))
+    }
+    val options = listOf("" to "全部", today to "今天", yesterday to "昨天")
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+        options.forEach { (v, label) ->
+            FilterChip(
+                selected = selected == v,
+                onClick = { onSelect(v) },
+                label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
     }
 }

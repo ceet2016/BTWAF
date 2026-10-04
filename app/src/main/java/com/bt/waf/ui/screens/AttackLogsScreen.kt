@@ -1,58 +1,180 @@
 package com.bt.waf.ui.screens
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bt.waf.WafApplication
-import com.bt.waf.ui.components.CenteredProgress
-import com.bt.waf.ui.components.ErrorText
-import com.bt.waf.ui.components.LabeledField
-import com.bt.waf.ui.components.SectionTitle
+import com.bt.waf.ui.components.*
+import com.bt.waf.ui.theme.Space
 import com.bt.waf.util.asList
-import com.bt.waf.util.asString
-import com.bt.waf.util.pickString
+import com.bt.waf.util.asMap
+import com.bt.waf.util.i
+import com.bt.waf.util.l
+import com.bt.waf.util.s
 import com.bt.waf.viewmodel.AttackLogsViewModel
 import com.bt.waf.viewmodel.WafViewModelFactory
+import kotlinx.coroutines.launch
 
+private data class LogEntry(
+    val route: String,
+    val title: String,
+    val desc: String,
+    val icon: ImageVector,
+    val tint: Color
+)
+
+private val LOG_ENTRIES = listOf(
+    LogEntry("list/attack_logs_full", "拦截日志", "每一条被 WAF 拦下的请求", Icons.Filled.GppBad, Color(0xFFDC2626)),
+    LogEntry("list/ip_block_log", "IP 封禁记录", "自动封禁与解封历史", Icons.Filled.Block, Color(0xFFF97316)),
+    LogEntry("list/cc_events", "CC 攻击事件", "高频访问触发的挑战记录", Icons.Filled.Bolt, Color(0xFF7C3AED)),
+    LogEntry("list/rule_hit", "规则命中日志", "哪条规则被触发过", Icons.Filled.Rule, Color(0xFF2563EB)),
+    LogEntry("list/opt_logs", "操作日志", "管理员的所有变更操作", Icons.Filled.History, Color(0xFF0891B2))
+)
+
+/**
+ * 日志中心：5 类日志的统一入口 + 实时拦截流预览。
+ * 点击卡片进入对应的通用列表页（带搜索/时间筛选/清空）。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AttackLogsScreen() {
+fun LogCenterScreen(onOpen: (String) -> Unit) {
     val ctx = LocalContext.current
     val repo = (ctx.applicationContext as WafApplication).repository
     val vm: AttackLogsViewModel = viewModel(factory = WafViewModelFactory(repo))
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
     var detail by remember { mutableStateOf<Map<String, Any?>?>(null) }
+    var showClear by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) { vm.load() }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            LabeledField(vm.keyword, { vm.keyword = it }, "搜索关键字", modifier = Modifier.weight(1f))
-            Spacer(Modifier.width(8.dp))
-            Button(onClick = { vm.load() }) { Text("搜索") }
-        }
-        ErrorText(vm.error)
-        if (vm.loading) CenteredProgress()
-        else {
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(vm.logs) { log ->
-                    val title = pickString(log, "url", "rule_name", "ip", "attack_ip", "site", "domain", "id")
-                    val sub = pickString(log, "time", "create_time", "rule", "type", "action", "country")
-                    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { vm.info(log["id"]) { d, _ -> detail = d } }) {
-                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(title.ifBlank { "(无标题)" }, style = MaterialTheme.typography.bodyMedium)
-                                if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        LoadingBar(vm.loading)
+        LazyColumn(
+            contentPadding = PaddingValues(Space.lg),
+            verticalArrangement = Arrangement.spacedBy(Space.md)
+        ) {
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    MetricCard(
+                        Icons.Filled.GppBad, "今日拦截", formatNumber(vm.todayCount.toLong()),
+                        accent = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MetricCard(
+                        Icons.Filled.FolderOpen, "日志总量", formatNumber(vm.total.toLong()),
+                        hint = "条记录", accent = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            item {
+                SectionHeader("日志分类", subtitle = "点击进入对应日志")
+            }
+
+            items(LOG_ENTRIES) { e ->
+                WafCard(onClick = { onOpen(e.route) }) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(e.tint.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                e.icon, null,
+                                tint = e.tint,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(Space.md))
+                        Column(Modifier.weight(1f)) {
+                            Text(e.title, style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                e.desc,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(
+                            Icons.Filled.ChevronRight, null,
+                            tint = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            item {
+                WafCard {
+                    SectionHeader(
+                        "实时拦截流",
+                        subtitle = "最新 ${minOf(vm.logs.size, 10)} 条",
+                        action = {
+                            Row {
+                                SmallButton("刷新") { vm.load() }
+                                Spacer(Modifier.width(Space.xs))
+                                SmallButton("清空", tone = ChipTone.DANGER) { showClear = true }
                             }
+                        }
+                    )
+                    Spacer(Modifier.height(Space.sm))
+                    ErrorBanner(vm.error) { vm.load() }
+                    if (vm.loading && vm.logs.isEmpty()) {
+                        Box(Modifier.fillMaxWidth().padding(Space.xl), Alignment.Center) {
+                            CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                        }
+                    } else if (vm.logs.isEmpty()) {
+                        EmptyState(
+                            icon = Icons.Filled.VerifiedUser,
+                            title = "暂无拦截记录",
+                            description = "有攻击命中规则时会实时出现在这里"
+                        )
+                    } else {
+                        vm.logs.take(10).forEach { log ->
+                            LogRow(
+                                ip = log.s("ip"),
+                                location = listOf(log.s("ip_country"), log.s("ip_city"))
+                                    .filter { it.isNotBlank() }.joinToString(" "),
+                                uri = log.s("request_uri").ifBlank { log.s("uri") },
+                                site = log.s("server_name"),
+                                risk = log.s("risk_type"),
+                                rule = log.s("filter_rule"),
+                                ts = log.l("time"),
+                                action = log.i("action"),
+                                onClick = {
+                                    vm.info(log["id"]) { d, _ -> detail = d }
+                                }
+                            )
+                        }
+                        if (vm.hasMore) {
+                            Spacer(Modifier.height(Space.sm))
+                            SmallButton("查看全部") { onOpen("list/attack_logs_full") }
                         }
                     }
                 }
@@ -60,24 +182,113 @@ fun AttackLogsScreen() {
         }
     }
 
+    // 详情
     detail?.let { d ->
         AlertDialog(
             onDismissRequest = { detail = null },
             confirmButton = { TextButton(onClick = { detail = null }) { Text("关闭") } },
-            title = { Text("攻击详情") },
+            title = { Text("拦截详情") },
             text = {
-                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                    d.forEach { (k, v) -> DataRowW(k.toString(), v.asString()) }
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    d.forEach { (k, v) ->
+                        DataRowDivider(
+                            k.toString(),
+                            when (v) {
+                                is List<*> -> v.joinToString(", ") { it.toString() }
+                                null -> "-"
+                                else -> v.toString()
+                            }
+                        )
+                    }
                 }
             }
+        )
+    }
+
+    // 清空确认
+    if (showClear) {
+        AlertDialog(
+            onDismissRequest = { showClear = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClear = false
+                    vm.clear { e ->
+                        scope.launch {
+                            snackbar.showSnackbar(e ?: "拦截日志已清空")
+                        }
+                    }
+                }) { Text("确认清空", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { showClear = false }) { Text("取消") } },
+            title = { Text("清空拦截日志") },
+            text = { Text("将删除全部拦截日志记录，此操作不可恢复。", style = MaterialTheme.typography.bodyMedium) },
+            icon = { Icon(Icons.Filled.DeleteSweep, null, tint = MaterialTheme.colorScheme.error) }
         )
     }
 }
 
 @Composable
-private fun DataRowW(label: String, value: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        Text(label, Modifier.width(110.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-        Text(value, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+private fun LogRow(
+    ip: String,
+    location: String,
+    uri: String,
+    site: String,
+    risk: String,
+    rule: String,
+    ts: Long,
+    action: Int,
+    onClick: () -> Unit
+) {
+    val (tone, actionText) = when (action) {
+        2, 3 -> ChipTone.DANGER to "拦截"
+        1 -> ChipTone.WARNING to "观察"
+        else -> ChipTone.NEUTRAL to "记录"
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+            .padding(vertical = Space.sm)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    ip.ifBlank { "未知 IP" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    listOf(location, site).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "—" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.width(Space.sm))
+            Column(horizontalAlignment = Alignment.End) {
+                StatusChip(actionText, tone)
+                if (ts > 0) {
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        formatTime(ts * 1000),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            listOf(uri, risk, rule).filter { it.isNotBlank() }.joinToString("  ·  ").ifBlank { "—" },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.outline,
+            maxLines = 1, overflow = TextOverflow.Ellipsis
+        )
     }
 }

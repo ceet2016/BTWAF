@@ -31,6 +31,16 @@ class WafViewModelFactory(
                 ProfileViewModel(repository) as T
             modelClass.isAssignableFrom(NotificationsViewModel::class.java) ->
                 NotificationsViewModel(repository) as T
+            modelClass.isAssignableFrom(ReportViewModel::class.java) ->
+                ReportViewModel(repository) as T
+            modelClass.isAssignableFrom(CertViewModel::class.java) ->
+                CertViewModel(repository) as T
+            modelClass.isAssignableFrom(SysInfoViewModel::class.java) ->
+                SysInfoViewModel(repository) as T
+            modelClass.isAssignableFrom(IpGroupViewModel::class.java) ->
+                IpGroupViewModel(repository) as T
+            modelClass.isAssignableFrom(ReplaceViewModel::class.java) ->
+                ReplaceViewModel(repository) as T
             else -> throw IllegalArgumentException("Unknown ViewModel: $modelClass")
         }
     }

@@ -2,7 +2,7 @@ package com.bt.waf.ui
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
-import com.bt.waf.BTWAFTheme
+import com.bt.waf.ui.theme.BTWAFTheme
 import com.bt.waf.WafApplication
 import com.bt.waf.ui.screens.LoginScreen
 import com.bt.waf.ui.screens.MainScreen

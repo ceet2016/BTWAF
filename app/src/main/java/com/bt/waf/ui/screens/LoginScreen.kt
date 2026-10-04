@@ -1,11 +1,20 @@
 package com.bt.waf.ui.screens
 
+import android.graphics.BitmapFactory
+import android.util.Base64
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -13,15 +22,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import android.graphics.BitmapFactory
-import android.util.Base64
 import com.bt.waf.WafApplication
-import com.bt.waf.ui.components.ErrorText
-import com.bt.waf.ui.components.LabeledField
+import com.bt.waf.ui.components.ErrorBanner
 import com.bt.waf.ui.components.PrimaryButton
+import com.bt.waf.ui.components.WafCard
+import com.bt.waf.ui.theme.Space
 import com.bt.waf.viewmodel.AuthViewModel
 import com.bt.waf.viewmodel.WafViewModelFactory
 
@@ -32,82 +45,206 @@ private fun decodeBase64Image(dataUrl: String) = runCatching {
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
 }.getOrNull()
 
+/**
+ * 登录页。
+ * 鉴权是三步走：① 访问后台入口页面建立 SID 会话 Cookie
+ * ② POST /api/user/login 换 JWT ③ 之后所有接口请求带 `Authorization: bt<token>` 头。
+ * 同一 IP 登录失败 5 次会被锁 300 秒，之后强制要求图形验证码。
+ */
 @Composable
 fun LoginScreen(onLoggedIn: () -> Unit) {
     val ctx = LocalContext.current
     val repo = (ctx.applicationContext as WafApplication).repository
     val vm: AuthViewModel = viewModel(factory = WafViewModelFactory(repo))
+    var pwdVisible by remember { mutableStateOf(false) }
 
-    Surface(Modifier.fillMaxSize()) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
         Column(
-            Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.Center
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Space.xl),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("堡塔云WAF", style = MaterialTheme.typography.headlineMedium)
-            Text("安卓管理端", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(72.dp))
 
-            LabeledField(vm.webUrl, { vm.webUrl = it }, "服务器地址", "https://ip:port/入口路径")
-            Spacer(Modifier.height(12.dp))
-            LabeledField(vm.username, { vm.username = it }, "账号")
-            Spacer(Modifier.height(12.dp))
-            LabeledField(vm.password, { vm.password = it }, "密码", isPassword = true)
-            Spacer(Modifier.height(8.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = vm.trust, onCheckedChange = { vm.trust = it })
-                Text("信任自签名证书（开发/测试环境）", style = MaterialTheme.typography.bodySmall)
+            // 品牌区
+            Box(
+                Modifier
+                    .size(66.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Filled.Shield, null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(34.dp)
+                )
             }
+            Spacer(Modifier.height(Space.lg))
+            Text(
+                "堡塔云 WAF",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(Space.xs))
+            Text(
+                "安卓管理端",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-            // 图形验证码：服务端在同一 IP 登录失败后强制要求
-            vm.captchaImage?.let { img ->
-                Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val bmp = remember(img) { decodeBase64Image(img) }
-                    if (bmp != null) {
-                        Image(
-                            bitmap = bmp.asImageBitmap(),
-                            contentDescription = "点击刷新验证码",
-                            modifier = Modifier
-                                .size(width = 140.dp, height = 56.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .clickable { vm.refreshCaptcha() }
-                        )
-                    } else {
+            Spacer(Modifier.height(Space.xxl))
+
+            // 表单卡片
+            WafCard {
+                Text(
+                    "连接你的 WAF",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(Modifier.height(Space.xs))
+                Text(
+                    "填写网页版后台的完整地址（含安全入口路径）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.height(Space.lg))
+                OutlinedTextField(
+                    value = vm.webUrl,
+                    onValueChange = { vm.webUrl = it },
+                    label = { Text("服务器地址") },
+                    placeholder = { Text("https://ip:port/入口路径") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
+                    shape = RoundedCornerShape(10.dp),
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(Space.sm))
+                OutlinedTextField(
+                    value = vm.username,
+                    onValueChange = { vm.username = it },
+                    label = { Text("账号") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    shape = RoundedCornerShape(10.dp),
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(Space.sm))
+                OutlinedTextField(
+                    value = vm.password,
+                    onValueChange = { vm.password = it },
+                    label = { Text("密码") },
+                    singleLine = true,
+                    visualTransformation = if (pwdVisible) VisualTransformation.None
+                    else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done
+                    ),
+                    trailingIcon = {
+                        IconButton(onClick = { pwdVisible = !pwdVisible }) {
+                            Icon(
+                                if (pwdVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = if (pwdVisible) "隐藏密码" else "显示密码"
+                            )
+                        }
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // 图形验证码：服务端在同一 IP 登录失败后强制要求
+                vm.captchaImage?.let { img ->
+                    Spacer(Modifier.height(Space.md))
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        val bmp = remember(img) { decodeBase64Image(img) }
                         Box(
                             Modifier
-                                .size(width = 140.dp, height = 56.dp)
-                                .clip(RoundedCornerShape(6.dp))
+                                .size(width = 128.dp, height = 56.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .clickable { vm.refreshCaptcha() },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("点击刷新", style = MaterialTheme.typography.bodySmall)
+                            if (bmp != null) {
+                                Image(
+                                    bitmap = bmp.asImageBitmap(),
+                                    contentDescription = "点击刷新验证码",
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Text("点击刷新", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        Spacer(Modifier.width(Space.sm))
+                        OutlinedTextField(
+                            value = vm.captchaInput,
+                            onValueChange = { vm.captchaInput = it },
+                            label = { Text("验证码") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(10.dp),
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { vm.refreshCaptcha() }) {
+                            Icon(Icons.Filled.Refresh, contentDescription = "刷新验证码")
                         }
                     }
-                    Spacer(Modifier.width(12.dp))
-                    OutlinedTextField(
-                        value = vm.captchaInput,
-                        onValueChange = { vm.captchaInput = it },
-                        label = { Text("验证码") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
                 }
+
+                Spacer(Modifier.height(Space.sm))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { vm.trust = !vm.trust }
+                        .padding(vertical = Space.xs),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(checked = vm.trust, onCheckedChange = { vm.trust = it })
+                    Spacer(Modifier.width(Space.xs))
+                    Column {
+                        Text("信任自签名证书", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "仅在测试环境使用，生产环境请勿开启",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+
+                if (vm.error != null) {
+                    Spacer(Modifier.height(Space.md))
+                    ErrorBanner(vm.error)
+                }
+
+                Spacer(Modifier.height(Space.lg))
+                PrimaryButton(
+                    text = if (vm.loading) "登录中…" else "登录",
+                    onClick = { vm.login(onLoggedIn) },
+                    enabled = !vm.loading,
+                    loading = vm.loading
+                )
             }
 
-            ErrorText(vm.error)
-            Spacer(Modifier.height(12.dp))
-            PrimaryButton(
-                text = if (vm.loading) "登录中…" else "登录",
-                onClick = { vm.login(onLoggedIn) },
-                enabled = !vm.loading
-            )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(Space.lg))
             Text(
-                "说明：首次连接会自动访问后台入口路径以建立会话 Cookie；登录后所有请求携带 JWT。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline
+                "登录流程：访问安全入口建立会话 → 账号密码换取 JWT → 后续请求携带令牌",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
+            Spacer(Modifier.height(Space.xxl))
         }
     }
 }
