@@ -95,28 +95,39 @@ release 签名，两者可以互相覆盖安装。
 ### 自动化构建与在线更新
 
 推送 `main` 后 [.cnb.yml](.cnb.yml) 自动构建 release APK，并把
-**版本文件**与**安装包**一起上传为 commit 附件：
+**版本文件**与**安装包**一起上传为 commit 附件。
+
+附件挂在**某一次 commit** 上，`<ref>` 必须是完整 commit SHA，用分支名会 404：
 
 ```
-https://cnb.cool/unicom/BTWAF/-/commit-assets/download/main/version.json
-https://cnb.cool/unicom/BTWAF/-/commit-assets/download/main/btwaf-latest.apk
+https://cnb.cool/unicom/BTWAF/-/commit-assets/download/<commit_sha>/version.json
+https://cnb.cool/unicom/BTWAF/-/commit-assets/download/<commit_sha>/btwaf-latest.apk
 ```
 
 `version.json` 形如：
 
 ```json
-{ "versionCode": 2, "versionName": "1.1.0", "apkName": "btwaf-latest.apk",
-  "size": 12345678, "sha256": "…", "publishedAt": "2026-10-05T12:00:44Z" }
+{ "versionCode": 3, "versionName": "1.2.0", "apkName": "btwaf-latest.apk",
+  "size": 12345678, "sha256": "…", "publishedAt": "2026-10-05T13:16:27Z" }
 ```
 
 **版本号只有一处来源**：`app/build.gradle` 的 `versionCode` / `versionName`。
-CI 用 grep 反查它生成 `version.json`，不要在手写文件里重复一遍 ——
+CI 用 sed 反查它生成 `version.json`，不要在手写文件里重复一遍 ——
 两边一旦不一致，App 会永远提示"已是最新"，而 CI 全程绿灯。
 
-App 端「系统 → 关于作者」页提供「在线更新」：**先查版本号（几百字节），
-确认 `versionCode` 确实更大才提示更新，APK 下载由用户点击触发**，
-并支持断点续传与 SHA256 校验。流量消耗与实际更新次数成正比，
-而不是与打开 App 的次数成正比。
+App 端「系统 → 关于作者」页提供「在线更新」，分两次请求完成：
+
+1. `GET https://cnb.cool/unicom/BTWAF.git/info/refs?service=git-upload-pack`
+   —— Git smart HTTP 的引用发现端点，公开仓库免认证，取分支当前 commit 的 SHA
+2. 用该 SHA 取 `version.json`，比对 `versionCode`
+
+**只有确认 `versionCode` 确实更大才提示更新，APK 下载由用户点击触发**，
+并支持断点续传与 SHA256 校验。两次请求合计只有几百字节，
+流量消耗与实际更新次数成正比，而不是与打开 App 的次数成正比。
+
+> 注意：`/-/raw/<ref>/<file>` 在文件不存在时返回 **HTTP 200 + 一张 HTML 错误页**，
+> 只判状态码会把错误页当成版本文件，解析出 `versionCode = 0`，
+> 表现为「永远提示已是最新」且毫无异常日志。App 端因此必须校验内容格式。
 
 用 Android Studio 直接打开亦可，需在 `local.properties` 里写明 `sdk.dir`。
 
