@@ -36,7 +36,12 @@ fun SysInfoScreen() {
     val repo = (ctx.applicationContext as WafApplication).repository
     val vm: SysInfoViewModel = viewModel(factory = WafViewModelFactory(repo))
 
-    LaunchedEffect(Unit) { vm.load() }
+    // 这一页**必须**实时：CPU 占用、内存、负载、网卡速率全都是
+    // 「此刻」的值，5 秒前的数字已经没有任何意义。
+    // 原来只有一个「刷新」按钮，用户盯着看指标纹丝不动，会以为是坏了。
+    // 3秒一轮——比概览快，因为服务器负载这类指标本来就变化快。
+    // 本页无任何输入框和编辑态，轮询覆盖不到用户正在填的东西。
+    AutoRefresh(intervalMillis = 3_000L, isLoading = vm.loading) { vm.load() }
 
     val sys = vm.info
     val host = sys["host"].asMap()
@@ -64,7 +69,8 @@ fun SysInfoScreen() {
                         "主机概览",
                         subtitle = listOf(host.s("platform"), host.s("platform_version"))
                             .filter { it.isNotBlank() }.joinToString(" "),
-                        action = { SmallButton("刷新") { vm.load() } }
+                        // 已改为自动轮询，这里挂个「实时」标记让用户知道数字在跳
+                        action = { LiveBadge() }
                     )
                     Spacer(Modifier.height(Space.md))
                     Row(
@@ -174,7 +180,8 @@ fun SysInfoScreen() {
             if (net.isNotEmpty()) {
                 item {
                     WafCard {
-                        SectionHeader("网络", subtitle = "各网卡实时速率")
+                        SectionHeader("网络", subtitle = "各网卡实时速率 · 每 3 秒自动刷新",
+                        action = { LiveBadge() })
                         Spacer(Modifier.height(Space.sm))
                         net.forEach { n ->
                             DataRowDivider(

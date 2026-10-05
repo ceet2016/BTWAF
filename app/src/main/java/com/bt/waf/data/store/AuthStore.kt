@@ -72,6 +72,26 @@ class AuthStore(context: Context) {
 
     val hasSession: Boolean get() = token.isNotBlank() && webUrl.isNotBlank()
 
+    /**
+     * 脱敏后的实例标识，用于顶部栏副标题。
+     *
+     * 只保留**域名**（IP 也算），把端口、后台入口路径、参数全部去掉：
+     *  - `https://81.70.19.168:8379/d75e7a5401` → `81.70.19.168`
+     *  - `https://waf.example.com/abc123`         → `waf.example.com`
+     *
+     * 为什么不直接显示完整地址：顶部栏是每页公共框架，等于每张截图都带着它。
+     * 完整地址里含内网 IP + 端口 + 后台入口路径（那串十六进制相当于半个凭据），
+     * 截图一转发就等于泄露。完整地址仍可在「系统 → 账号信息」主动查看。
+     */
+    val hostLabel: String
+        get() {
+            val uri = webUrl.trim().toUri()
+            val host = uri.host?.takeIf { it.isNotBlank() }
+                ?: return "未配置"
+            // IPv6 字面量去掉方括号
+            return host.removePrefix("[").removeSuffix("]")
+        }
+
     fun clearSession() = prefs.edit().remove(KEY_TOKEN).remove(KEY_TOKEN_EXPIRE).apply()
 
     fun clearAll() = prefs.edit().clear().apply()

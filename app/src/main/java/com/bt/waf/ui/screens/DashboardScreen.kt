@@ -41,6 +41,13 @@ fun DashboardScreen(onOpenLogs: () -> Unit = {}, onOpenReport: () -> Unit = {}) 
     val refreshTick = remember { mutableStateOf(0) }
     LaunchedEffect(refreshTick.value) { if (refreshTick.value > 0) vm.load() }
 
+    // 「实时态势」这个名字承诺了实时，就必须真会动。
+    // 原来只有 refreshTick 手动点一下，所有数字会一直停在打开那一刻；
+    // 而且「请求趋势」卡片上摆了个「刷新」按钮，与「实时采样」的文案自相矛盾。
+    // 现在统一 5 秒自动轮询（生命周期感知：退到后台即停），标题旁挂 LiveBadge
+    // 让用户看见它真在跳，刷新按钮撤掉。
+    AutoRefresh(intervalMillis = 5_000L, isLoading = vm.loading) { vm.load() }
+
     val count = vm.countInfo["count"].asMap()
     val nginx = vm.nginxCount
     // 实时值优先取 nginx_count（QPS/流量），回退到 count_info
@@ -141,7 +148,9 @@ fun DashboardScreen(onOpenLogs: () -> Unit = {}, onOpenReport: () -> Unit = {}) 
                         icon = Icons.Filled.Shield,
                         title = "实时态势",
                         subtitle = "共防护 $siteTotal 个网站 · 回源 ${"%.0f".format(proxyTime)} ms",
-                        iconTint = MaterialTheme.colorScheme.primary
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        // 「实时」得让人看得见：一个呼吸圆点比任何文案都有说服力。
+                        trailing = { LiveBadge() }
                     )
                 }
             }
@@ -195,10 +204,10 @@ fun DashboardScreen(onOpenLogs: () -> Unit = {}, onOpenReport: () -> Unit = {}) 
                 WafCard {
                     SectionHeader(
                         "请求趋势",
-                        subtitle = "最近 60 分钟 · 来自 Nginx 实时采样",
-                        action = {
-                            SmallButton("刷新") { refreshTick.value++ }
-                        }
+                        // 副标题带 LiveBadge：明确这是自动在更新的，
+                        // 不需要用户手动点任何按钮
+                        subtitle = "最近 60 分钟 · 每 5 秒自动刷新",
+                        action = { LiveBadge() }
                     )
                     Spacer(Modifier.height(Space.md))
                     if (trend.size >= 2) {
@@ -227,7 +236,13 @@ fun DashboardScreen(onOpenLogs: () -> Unit = {}, onOpenReport: () -> Unit = {}) 
             // ── 攻击类型 / 来源 ──
             item {
                 WafCard {
-                    SectionHeader("攻击类型 Top", subtitle = "按风险类型聚合")
+                    // 攻击类型是当前这一分钟的真实分布，跟着 5 秒轮询一起跳。
+                    // 用户点名的「攻击类型下面的东西也要实时」就是这块。
+                    SectionHeader(
+                        "攻击类型 Top",
+                        subtitle = "按风险类型聚合 · 实时",
+                        action = { LiveBadge() }
+                    )
                     Spacer(Modifier.height(Space.md))
                     BarChart(typeTop, Modifier.fillMaxWidth())
                 }

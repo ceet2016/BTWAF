@@ -105,6 +105,24 @@ fun ManagedListScreen(config: ListConfig) {
 
     LaunchedEffect(config.key) { vm.load() }
 
+    // ── 日志类列表自动轮询 ──────────────────────────────────────────
+    // 只有 config.liveRefreshMillis != null 的列表才开（日志类，
+    // 见 ListConfig 里的说明），配置类列表保持一次性加载。
+    //
+    // 三个必须挡住的场景，否则轮询会变成 bug：
+    //  1. page != 1 —— 用户往下翻了页。load() 内部会 page=1，
+    //     一次轮询就把人家从第 5 页拽回第 1 页。
+    //  2. keyword 非空 —— 用户正在搜。轮询会用当前 keyword 重拉，
+    //     虽然结果对，但列表整段跳动，正在点的那一行会跑位。
+    //  3. 任何弹窗打开 —— 新增/删除确认/详情，操作中刷新最让人恼火。
+    val busy = showCreate || deleteIndex >= 0 || detailItem != null || clearConfirm
+    AutoRefresh(
+        // liveRefreshMillis 为 null 时传 0，AutoRefresh 会直接不注册协程
+        intervalMillis = config.liveRefreshMillis ?: 0L,
+        isLoading = vm.loading,
+        enabled = vm.page == 1 && vm.keyword.isBlank() && !busy
+    ) { vm.load() }
+
     // 触底自动加载下一页
     LaunchedEffect(listState, vm.items.size) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
@@ -141,51 +159,45 @@ fun ManagedListScreen(config: ListConfig) {
         Column(Modifier.fillMaxSize().padding(padding)) {
             // ── 顶部工具条 ──
             Column(Modifier.padding(horizontal = Space.lg, vertical = Space.sm)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = vm.keyword,
-                        onValueChange = { vm.keyword = it },
-                        placeholder = { Text("搜索…", style = MaterialTheme.typography.bodySmall) },
-                        singleLine = true,
-                        leadingIcon = { Icon(Icons.Filled.Search, null, Modifier.size(18.dp)) },
-                        trailingIcon = {
-                            if (vm.keyword.isNotEmpty()) {
-                                IconButton(onClick = { vm.keyword = ""; vm.load() }) {
-                                    Icon(Icons.Filled.Close, "清空", Modifier.size(16.dp))
-                                }
-                            }
-                        },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = {
-                            keyboard?.hide(); vm.load()
-                        }),
-                        shape = RoundedCornerShape(10.dp),
-                        textStyle = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp)
-                    )
-                    Spacer(Modifier.width(Space.sm))
-                    FilledTonalIconButton(
-                        onClick = { keyboard?.hide(); vm.load() },
-                        modifier = Modifier.size(52.dp)
-                    ) { Icon(Icons.Filled.Search, contentDescription = "搜索") }
-                    if (config.clearPath != null) {
-                        Spacer(Modifier.width(Space.xs))
-                        FilledTonalIconButton(
-                            onClick = { clearConfirm = true },
-                            modifier = Modifier.size(52.dp),
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            )
-                        ) { Icon(Icons.Filled.DeleteSweep, contentDescription = "清空") }
-                    }
-                }
+                // 统一走 SearchToolbar：原来给 TextField 写死 52dp，
+                // 而 M3 TextField 最小高度是 56dp —— 压下去会把占位文字
+                // 「搜索…」上沿切掉一截（实机可见），旁边按钮也跟着不齐。
+                SearchToolbar(
+                    keyword = vm.keyword,
+                    onKeywordChange = { vm.keyword = it },
+                    onSearch = { keyboard?.hide(); vm.load() },
+                    onClear = if (vm.keyword.isNotEmpty()) {
+                        { vm.keyword = ""; vm.load() }
+                    } else null,
+                    onClearLogs = if (config.clearPath != null) {
+                        { clearConfirm = true }
+                    } else null,
+                )
                 if (config.dateFilter) {
                     Spacer(Modifier.height(Space.sm))
                     DateRangeChips(
                         selected = vm.dateRange,
                         onSelect = { vm.dateRange = it; vm.load() }
+                    )
+                }
+            }
+
+            // 日志类列表：明确告诉用户「这条在自动刷新」。
+            // 否则用户盯着屏幕看新攻击不出现，以为功能坏了 ——
+            // 而实际上只是他不知道该等下一次轮询。
+            // 非日志类（配置类列表）不显示，别给静态数据加假标记。
+            if (config.liveRefreshMillis != null) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Space.lg, vertical = Space.xs),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    LiveBadge(
+                        active = vm.page == 1 && vm.keyword.isBlank() && !busy,
+                        label = if (vm.page == 1 && vm.keyword.isBlank() && !busy)
+                            "实时 · 每 ${config.liveRefreshMillis / 1000} 秒自动刷新"
+                        else "已暂停（翻页或搜索中）"
                     )
                 }
             }

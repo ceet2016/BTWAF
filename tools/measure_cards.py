@@ -127,6 +127,16 @@ def analyze(path):
         if len(segs) == 2 and segs[0][0] <= STD_RMARGIN + TOL:
             continue
 
+        # 噪声带过滤 6：**段间距远小于栅格间距**。
+        # GridRow 的 gap 是 Space.sm = 8dp，在 1080 宽（density≈2.75）下
+        # 实测 22px。而「一张卡里的多个 chip 被边框切开」时，切口只有
+        # 边框宽度：实测自定义规则页 y=1820 那行，三段宽度 [360,264,360]、
+        # 间距只有 4px（筛选卡的「全部模式 / CC 防护 / 重定向」三枚 chip）。
+        # 卡内元素被切开 → 间距是个位数；真正并排的两张卡 → 间距是 22px。
+        # 用10px 当分界，两类都判得干净。
+        if gaps and len(segs) >= 3 and max(gaps) < 10:
+            continue
+
         wspread = max(ws) - min(ws)
         gspread = max(gaps) - min(gaps) if gaps else 0
         lm = segs[0][0]

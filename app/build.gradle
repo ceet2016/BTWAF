@@ -72,6 +72,10 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
+    // LocalLifecycleOwner + repeatOnLifecycle：AutoRefresh 要靠它做到
+    // 「切后台停轮询、回前台继续」，缺了它就只能用 LaunchedEffect(Unit)
+    // 硬循环，退到后台也会持续打接口。
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
     implementation("androidx.activity:activity-compose:1.9.2")
 

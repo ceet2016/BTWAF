@@ -44,25 +44,39 @@ fun ReportScreen() {
     var unblockTarget by remember { mutableStateOf<Map<String, Any?>?>(null) }
     var confirmUnblockAll by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { vm.load() }
     LaunchedEffect(vm.message) {
         vm.message?.let { snackbar.showSnackbar(it); vm.consumeMessage() }
     }
+
+    // 攻击报表是「此刻正在发生」的数据，静态快照没有意义。
+    // 用户明确要求命中开关这类开关状态也要实时 —— 它们随时可能被人改动，
+    // 页面上看到的开/关必须是真的当前状态，不是打开那一刻的。
+    // 8 秒一轮：比概览慢一点（报表聚合更重），但仍能在用户观察时看到变化。
+    //
+    // 原有的 LaunchedEffect(Unit) { vm.load() } 已删除 ——
+    // AutoRefresh 首帧就会执行一次，留着等于每次进页面发两遍请求。
+    AutoRefresh(intervalMillis = 8_000L, isLoading = vm.loading) { vm.load() }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbar) }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            // ── 时间范围 ──
-            Column(Modifier.padding(horizontal = Space.lg, vertical = Space.sm)) {
-                WafTabRow(
-                    labels = TABS,
-                    selectedIndex = tab,
-                    onSelect = { idx -> tab = idx },
-                    containerColor = MaterialTheme.colorScheme.background,
-                )
-            }
+            // Tab 栏直接贴父容器，**不要**再套一层带 padding 的 Column。
+            //
+            // 原来这里是 Column(Modifier.padding(horizontal = Space.lg, vertical = Space.sm))
+            // 包裹，但 WafTabRow 内部 contentPadding 已经留了 Space.lg，
+            // 于是：
+            //  - 左右留白叠成 32dp，与下方卡片的 16dp 不一致（不对称）
+            //  - 顶部 vertical=Space.sm 与 Scaffold 的 padding 叠加，
+            //    Tab 栏上方空出约 230px 的大空洞（用户报的第 3 个问题）
+            //  - WafTabRow 是 fillMaxWidth，外层水平 padding 根本管不到它
+            WafTabRow(
+                labels = TABS,
+                selectedIndex = tab,
+                onSelect = { idx -> tab = idx },
+                containerColor = MaterialTheme.colorScheme.background,
+            )
             LoadingBar(vm.loading)
             ErrorBanner(vm.error) { vm.load() }
 
@@ -169,7 +183,11 @@ private fun ReportOverview(
         }
         item {
             WafCard {
-                SectionHeader("攻击类型分布", subtitle = "按 WAF 风险类型聚合")
+                SectionHeader(
+                    "攻击类型分布",
+                    subtitle = "按 WAF 风险类型聚合",
+                    action = { LiveBadge() }
+                )
                 Spacer(Modifier.height(Space.md))
                 BarChart(
                     vm.typeTop.map { it.s("risk_type") to it.l("type_total").toFloat() },
@@ -179,7 +197,11 @@ private fun ReportOverview(
         }
         item {
             WafCard {
-                SectionHeader("攻击来源 Top", subtitle = "按 IP 聚合")
+                SectionHeader(
+                    "攻击来源 Top",
+                    subtitle = "按 IP 聚合",
+                    action = { LiveBadge() }
+                )
                 Spacer(Modifier.height(Space.md))
                 BarChart(
                     vm.ipTop.take(8).map { it.s("ip") to it.l("visits").toFloat() },
@@ -190,7 +212,11 @@ private fun ReportOverview(
         }
         item {
             WafCard {
-                SectionHeader("攻击 URI Top", subtitle = "按访问路径聚合")
+                SectionHeader(
+                    "攻击 URI Top",
+                    subtitle = "按访问路径聚合",
+                    action = { LiveBadge() }
+                )
                 Spacer(Modifier.height(Space.md))
                 BarChart(
                     vm.uriTop.take(8).map { it.s("uri") to it.l("uri_total").toFloat() },
@@ -390,7 +416,15 @@ private fun ReportRuleHit(vm: ReportViewModel) {
 @Composable
 private fun ReportHitTypes(vm: ReportViewModel, snackbar: SnackbarHostState) {
     if (vm.hitTypes.isEmpty()) {
-        EmptyState(Icons.Filled.Tune, "未能加载命中开关", description = "请下拉刷新重试")
+        // 原来写「请下拉刷新重试」，但这页是 Column + verticalScroll，
+        // **没有下拉刷新**（没有 PullToRefresh / nestedScroll 连接），
+        // 用户会照着提示去下拉，结果什么也没发生。
+        // 页面本身已有 8 秒自动轮询，失败时直接说明会自动重试。
+        EmptyState(
+            Icons.Filled.Tune,
+            "未能加载命中开关",
+            description = "将自动重试；如持续失败请检查实例连接"
+        )
         return
     }
     val labels = mapOf(
@@ -410,7 +444,9 @@ private fun ReportHitTypes(vm: ReportViewModel, snackbar: SnackbarHostState) {
         WafCard {
             SectionHeader(
                 "命中日志开关",
-                subtitle = "关闭后该类型命中不再写入命中日志（不影响拦截）"
+                subtitle = "关闭后该类型命中不再写入命中日志（不影响拦截）",
+                // 开关状态随时可能被人在网页端改，页面上看到的必须实时。
+                action = { LiveBadge() }
             )
             Spacer(Modifier.height(Space.sm))
             labels.forEach { (key, label) ->

@@ -57,7 +57,18 @@ fun SitesScreen() {
         mutableStateMapOf("site_name" to "", "port" to "80", "server_ip" to "")
     }
 
-    LaunchedEffect(Unit) { vm.load() }
+    // 站点列表带防护开关，开关状态随时可能被人改动，页面上看到的
+    // 开/关必须是真的当前状态。
+    //
+    // `enabled = !showCreate` 是关键：新增站点对话框打开时暂停轮询。
+    // 否则用户正往「站点名/端口/源站 IP」里填字，列表那边一次自动
+    // 刷新就把整页重排，正在点的行可能跳位——虽然表单状态在 cf 里
+    // 不会被冲掉，但交互上很莫名其妙。
+    AutoRefresh(
+        intervalMillis = 8_000L,
+        isLoading = vm.loading,
+        enabled = !showCreate
+    ) { vm.load() }
 
     fun toast(msg: String) {
         scope.launch { snackbar.showSnackbar(msg) }

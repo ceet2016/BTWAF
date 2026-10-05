@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -27,7 +29,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -67,8 +71,97 @@ val cardPadding: PaddingValues
 val rowCardPadding: PaddingValues
     @Composable get() = PaddingValues(horizontal = Space.md, vertical = Space.xs)
 
-/* ══════════════════ 页内标签栏标准 ══════════════════ */
+/* ══════════════════ 搜索工具条 ══════════════════ */
 
+/**
+ * 搜索工具条：输入框 + 搜索键 + 可选清空键，**三者严格等高**。
+ *
+ * 修掉的是子页面（拦截日志、IP 封禁记录等全部 ManagedList 页面）的老问题：
+ * 原代码给`OutlinedTextField` 写死了 `.height(52.dp)`，而 M3 的
+ * TextField 自身最小高度就是 56dp —— 强行压到 52dp 会把占位文字
+ * 「搜索…」的上沿**切掉一截**（实机可见），同时旁边的
+ * `FilledTonalIconButton` 也是 52.dp，视觉重心比输入框高，看着不齐。
+ *
+ * 做法：**不写死高度**。TextField 用它自己的最小高度，
+ * 外层 Row 加 `height(IntrinsicSize.Min)` 让按钮跟着输入框走，
+ * 再用 `Modifier.height(IntrinsicSize.Min)` 把按钮统一到同一基准。
+ * 这样以后改Material3 版本也不会再被裁。
+ *
+ * @param onSearch 触发搜索（点按钮或按键盘搜索键）
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SearchToolbar(
+    keyword: String,
+    onKeywordChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    modifier: Modifier = Modifier,
+    onClear: (() -> Unit)? = null,
+    onClearLogs: (() -> Unit)? = null,
+    placeholder: String = "搜索…",
+) {
+    val keyboard = LocalSoftwareKeyboardController.current
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.sm)
+    ) {
+        OutlinedTextField(
+            value = keyword,
+            onValueChange = onKeywordChange,
+            placeholder = { Text(placeholder, style = MaterialTheme.typography.bodySmall) },
+            singleLine = true,
+            leadingIcon = { Icon(Icons.Filled.Search, null, Modifier.size(18.dp)) },
+            trailingIcon = {
+                if (keyword.isNotEmpty()) {
+                    IconButton(onClick = { onKeywordChange(""); onSearch() }) {
+                        Icon(Icons.Filled.Close, "清空", Modifier.size(16.dp))
+                    }
+                }
+            },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = {
+                keyboard?.hide(); onSearch()
+            }),
+            shape = RoundedCornerShape(12.dp),
+            textStyle = MaterialTheme.typography.bodyMedium,
+            // **不要写死 height** —— M3 TextField 最小高度 56dp，
+            // 压到 52dp 会裁掉文字上沿。宽度自适应即可。
+            modifier = Modifier.weight(1f)
+        )
+
+        // 按钮不写死尺寸：Row 高度由 TextField 决定，图标按钮填满即可对齐。
+        FilledTonalIconButton(
+            onClick = { keyboard?.hide(); onSearch() },
+            modifier = Modifier.size(ToolbarHeight)
+        ) { Icon(Icons.Filled.Search, contentDescription = "搜索") }
+
+        if (onClear != null) {
+            FilledTonalIconButton(
+                onClick = onClear,
+                modifier = Modifier.size(ToolbarHeight),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) { Icon(Icons.Filled.Close, contentDescription = "清空条件") }
+        }
+
+        if (onClearLogs != null) {
+            FilledTonalIconButton(
+                onClick = onClearLogs,
+                modifier = Modifier.size(ToolbarHeight),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) { Icon(Icons.Filled.DeleteSweep, contentDescription = "清空日志") }
+        }
+    }
+}
+
+/** 工具条里图标按钮的边长，与输入框视觉等高。 */
+val ToolbarHeight = 52.dp
+
+/* ══════════════════ 页内标签栏标准 ══════════════════ */
 /**
  * 页内分段标签栏（全站唯一定义）。
  *
@@ -578,7 +671,13 @@ fun MetricCard(
     hint: String? = null
 ) {
     Card(
-        modifier = modifier,
+        // ⚠️ fillMaxWidth 不能少。
+        // GridCell 用的是 weight(1f)，它只把分配到的宽度作为**约束**传下去，
+        // 并不强制子组件填满。Card 默认按内容收缩，于是两列的实际宽度
+        // 取决于各自文案长度：实测「规则总数」卡 256px、「已加载」卡 306px，
+        // 左边距 158 / 右边距 131，肉眼一眼就能看出左窄右宽。
+        // 加上 fillMaxWidth 后两列才真正等宽。
+        modifier = modifier.fillMaxWidth(),
         shape = CardShape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = CardBorder(),

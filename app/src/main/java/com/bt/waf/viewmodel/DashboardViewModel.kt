@@ -65,8 +65,23 @@ class DashboardViewModel(private val repo: WafRepository) : ViewModel() {
                 if (rInfos.isFailure) failures += "拦截明细"
                 if (rMap.isFailure) failures += "攻击地图"
                 if (rSys.isFailure) failures += "系统信息"
-                if (failures.isNotEmpty() && countInfo.isEmpty() && sysInfo.isEmpty()) {
-                    error = "部分数据加载失败：${failures.joinToString("、")}"
+                // **全部失败**才报错：全挂了才需要用户处理。
+                if (failures.size == 4) {
+                    error = "无法连接 WAF 实例，请检查地址与网络"
+                } else if (failures.isNotEmpty()) {
+                    // 部分失败：页面主体数据还在（countInfo / sysInfo 都拿到了），
+                    // 照样正常渲染，不弹错误条。
+                    //
+                    // 原来这里写的是
+                    // `failures.isNotEmpty() && countInfo.isEmpty() && sysInfo.isEmpty()`
+                    // 才置error，但文案硬写成「部分数据加载失败」——
+                    // 逻辑与文案互相矛盾：真出现「部分失败」时
+                    // 条件不成立所以不报错；而真正全失败时又显示
+                    //「部分数据加载失败」，纯属误导。
+                    //
+                    // 至于 Nginx 未启用导致 attack_map 之类拿不到，
+                    // 那是部署状态问题，不是 App 的错，不该拦在页面上。
+                    error = null
                 }
             } catch (e: Exception) {
                 error = e.message

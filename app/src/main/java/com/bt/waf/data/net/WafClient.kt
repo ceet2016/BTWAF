@@ -26,6 +26,9 @@ class InMemoryCookieJar : CookieJar {
     }
 
     override fun loadForRequest(url: HttpUrl): List<Cookie> = cache[url.host] ?: emptyList()
+
+    /** 清空全部 Cookie（换实例 / 退出登录）。 */
+    fun clear() = cache.clear()
 }
 
 /** 在请求头注入 JWT：Authorization: bt<token>（仅对 /api/ 路径）。 */
@@ -62,22 +65,52 @@ private fun OkHttpClient.Builder.trustAllCertificates(): OkHttpClient.Builder {
  */
 class WafClient(private val authStore: AuthStore) {
 
+    /**
+     * 进程级共享的 CookieJar。
+     *
+     * ⚠️ 这个实例**必须跨 reconfigure() 复用**，不能每次 buildClient()
+     * 新建一个 `InMemoryCookieJar()`。
+     *
+     * 为什么：aawaf 的安全入口中间件要求所有 `/api/` 开头的请求带上有效
+     * SID Cookie，**没有 Cookie 一律返回 404**（权限错误故意用 404
+     * 而不是 401，避免探测者区分「不存在」与「无权限」）。
+     * 而 Cookie 就存在这个 jar 里。
+     *
+     * 原来的写法 `builder.cookieJar(InMemoryCookieJar())` 每次重建客户端
+     * 都造一个空 jar，把刚种下的 SID Cookie 全部丢掉。触发路径：
+     * `login()` → `saveToken()` → `reconfigure()` → **Cookie 清空** → 此后
+     * 所有 API 请求 404。表现为「刚登录就整页报错」，且重试永远好不了，
+     * 因为每次重试又会再 reconfigure 一次。
+     *
+     * 实例地址变更（applyConnection）时需要丢弃旧 Cookie，由调用方
+     * 显式调[clearCookies]；其余情况一律保留。
+     */
+    private val cookieJar = InMemoryCookieJar()
+
     var client: OkHttpClient = buildClient()
         private set
     var api: WafApi = buildApi(client)
         private set
 
+    /** 重建客户端以套用新的 BaseUrl / 证书配置。**保留 CookieJar**。 */
     fun reconfigure() {
         client = buildClient()
         api = buildApi(client)
     }
 
+    /** 换实例或退出登录时调用：丢弃已持有的 Cookie，强制重新 bootstrap。 */
+    fun clearCookies() = cookieJar.clear()
+
     private fun buildClient(): OkHttpClient {
         val builder = OkHttpClient.Builder()
-            .cookieJar(InMemoryCookieJar())
+            .cookieJar(cookieJar)
             .addInterceptor(AuthInterceptor { authStore.token })
             .addInterceptor(
                 HttpLoggingInterceptor().apply {
+                    // 保持 BASIC：HEADERS 级别会把 Cookie 与 Authorization
+                    // 完整打进 logcat，既泄漏会话凭据，日志量也大得没法看。
+                    // 排查「SID Cookie 有没有带上」时临时改成 HEADERS，
+                    // 抓完记得改回来。
                     level = HttpLoggingInterceptor.Level.BASIC
                 }
             )

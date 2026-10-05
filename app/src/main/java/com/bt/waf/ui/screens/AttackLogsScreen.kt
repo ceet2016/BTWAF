@@ -66,7 +66,13 @@ fun LogCenterScreen(onOpen: (String) -> Unit) {
     var detail by remember { mutableStateOf<Map<String, Any?>?>(null) }
     var showClear by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { vm.load() }
+    // 日志中心是「今天挡住了多少次攻击」的地方，计数必须实时。
+    // 原来只在进入时 load() 一次，用户盯着看也不会变 —— 看着像坏了。
+    //
+    // 注意这里**删掉了原来的 LaunchedEffect(Unit) { vm.load() }**：
+    // AutoRefresh 的协程体开头就会先执行一次 block()（首帧立即加载），
+    // 两者并存等于每次进页面都发两次请求。
+    AutoRefresh(intervalMillis = 6_000L, isLoading = vm.loading) { vm.load() }
 
     Column(
         Modifier
@@ -127,11 +133,15 @@ fun LogCenterScreen(onOpen: (String) -> Unit) {
                 WafCard {
                     SectionHeader(
                         "实时拦截流",
-                        subtitle = "最新 ${minOf(vm.logs.size, 10)} 条",
+                        // 这一页已经 6 秒自动轮询了，再摆一个「刷新」按钮
+                        // 自相矛盾（和概览页「请求趋势」那个按钮同类问题）。
+                        // 换成 LiveBadge：告诉用户它在自动更新，而不是
+                        // 让他自己动手点。
+                        subtitle = "最新 ${minOf(vm.logs.size, 10)} 条 · 每 6 秒自动刷新",
                         action = {
-                            Row {
-                                SmallButton("刷新") { vm.load() }
-                                Spacer(Modifier.width(Space.xs))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                LiveBadge()
+                                Spacer(Modifier.width(Space.sm))
                                 SmallButton("清空", tone = ChipTone.DANGER) { showClear = true }
                             }
                         }

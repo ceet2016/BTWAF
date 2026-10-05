@@ -42,32 +42,6 @@ shot() {
     sz=$(stat -c%s "$OUT/$name.png" 2>/dev/null || echo 0)
   fi
   if [ "$sz" -ge 10000 ]; then
-    VISITED="$VISITED $name"
-  else
-    SHOT_FAIL=$((SHOT_FAIL + 1))
-    echo "  !! $name 截图失败(0 字节)"
-  fi
-  return 0
-}
-
-open_drawer() { "$ADB" shell input tap 75 198 >/dev/null 2>&1; sleep 2; }
-back_home()   { "$ADB" shell input tap 130 2245 >/dev/null 2>&1; sleep 3; }
-
-# 校验截图确实是新页面：内容完全一样的截图说明点击没生效，
-# 之前就因为 Tab y 坐标写错，三个 Tab 拍出同一张图还以为测过了。
-shot() {
-  local name="$1"
-  "$ADB" exec-out screencap -p > "$OUT/$name.png" 2>/dev/null
-  local sz
-  sz=$(stat -c%s "$OUT/$name.png" 2>/dev/null || echo 0)
-  if [ "$sz" -lt 10000 ]; then
-    # 键盘弹出时 screencap 会返回 0 字节，收起键盘再试
-    "$ADB" shell input keyevent 4 >/dev/null 2>&1
-    sleep 2
-    "$ADB" exec-out screencap -p > "$OUT/$name.png" 2>/dev/null
-    sz=$(stat -c%s "$OUT/$name.png" 2>/dev/null || echo 0)
-  fi
-  if [ "$sz" -ge 10000 ]; then
     local h
     h=$(md5sum "$OUT/$name.png" 2>/dev/null | cut -c1-10)
     # 与上一张完全同哈希 -> 页面没切换，这张没有验证价值
@@ -83,6 +57,30 @@ shot() {
   fi
   return 0
 }
+
+open_drawer() { "$ADB" shell input tap 75 198 >/dev/null 2>&1; sleep 2; }
+
+# 回一级页（概览）。
+#
+# ⚠️ 只能用返回键，**不能用坐标点Tab 栏**：二级页面（抽屉进去的那些）
+# 根本不渲染 bottomBar，此时 y=2245 落在页面内容上，点下去毫无意义。
+# 之前三张 Tab 截图就是这么废掉的 —— 拍出来是「IP 白名单」这种二级页。
+#
+# 概览页再按返回键会退出 App，所以要查当前焦点，退出了就重新拉起。
+back_home() {
+  "$ADB" shell input keyevent 4 >/dev/null 2>&1
+  sleep 2
+  local focus
+  focus=$("$ADB" shell dumpsys window 2>/dev/null | grep -m1 mCurrentFocus)
+  case "$focus" in
+    *"$PKG"*) ;;
+    *) "$ADB" shell am start -n "$PKG/.MainActivity" >/dev/null 2>&1; sleep 6 ;;
+  esac
+}
+
+# 校验截图确实是新页面：内容完全一样的截图说明点击没生效，
+# 之前就因为 Tab y 坐标写错，三个 Tab 拍出同一张图还以为测过了。
+#
 
 # token 过期弹窗会盖住整页，挡住所有点击。
 #
@@ -168,17 +166,34 @@ echo "== 底部 Tab =="
 # ⚠️ 必须先回一级页（概览）再点 Tab。
 # 二级页面（抽屉进去的那些）**根本不渲染 bottomBar**，
 # 此时 y=2235 落在页面内容上：会误触 FAB 弹出「新增」对话框，
-# 标题也回落成「堡塔云WAF」。之前三张 Tab 截图就是这么废掉的。
-# 实测一级页的 Tab 栏正常：标题正确、四个 Tab 完整、当前项高亮。
+# 标题也回落成「堡塔云WAF」。之前三张 Tab 截图就是这么废掉的
+# —— 拍出来是「IP 白名单」「拦截日志」这种二级页，看着像对了其实全错。
+# 现在统一用 back_home()（返回键 + 焦点检测），不要用坐标点。
 "$ADB" shell input tap 130 2245 >/dev/null 2>&1; sleep 2   # 返回
 for t in "30_protect:430" "31_logs:720" "32_system:1010"; do
   name="${t%%:*}"; x="${t##*:}"
-  "$ADB" shell input tap 130 2245 >/dev/null 2>&1; sleep 2
+  back_home
   "$ADB" shell input tap "$x" 2235 >/dev/null 2>&1
   sleep 4
   clear_relogin_dialog
   shot "$name"
 done
+
+# 「关于作者」在抽屉最后一组，需要滚到底才能看到，不在上面那张坐标表里。
+# 单独走一段：回概览 → 开抽屉 → 连滚三次到底 → 点最后一项。
+echo "== 关于作者（需滚动到抽屉底部）=="
+back_home
+open_drawer
+for _ in 1 2 3; do
+  "$ADB" shell input swipe 400 1900 400 500 250 >/dev/null 2>&1
+  sleep 1
+done
+# 滚到底后「关于作者」实测文本行 y=2096..2124，中心 2110。
+# （旧值 2129 落在它下面几 px 的空白里，点击被吃掉，拍出来是概览页）
+"$ADB" shell input tap 300 2110 >/dev/null 2>&1
+sleep 3
+shot 33_about
+back_home
 
 echo "== 完成 =="
 echo "  截图目录: $OUT"

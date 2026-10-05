@@ -34,6 +34,24 @@ class WafRepository(
     /** 串行化重登：多个页面同时发现 token 过期时，只发一次登录请求。 */
     private val reloginMutex = Mutex()
 
+    /** 串行化 bootstrap：并发调用时只发一次 GET，避免 Cookie 还没种下就被/api 请求抢跑。 */
+    private val bootstrapMutex = Mutex()
+
+    /**
+     * 这些接口不触发 bootstrap。
+     *
+     * 前两个由调用方在调它们之前已经**串行 await 过** bootstrap，
+     * 再进一次就是自己等自己 —— bootstrapMutex 不可重入，直接死锁。
+     * logout 马上要清 Cookie，多发一次 GET 纯属浪费。
+     */
+    private val SKIP_BOOTSTRAP_PATHS = setOf(
+        "user/login", "user/get_validate_code", "user/logout"
+    )
+
+    /** SID Cookie 是否已成功种下。@Volatile：bootstrap 在 IO 线程写、业务线程读。 */
+    @Volatile
+    private var bootstrapped: Boolean = false
+
     /**
      * 服务端已判定鉴权失效，需要用户重新登录。
      *
@@ -57,6 +75,10 @@ class WafRepository(
         authStore.webUrl = webUrl
         authStore.trustSelfSigned = trustSelfSigned
         wafClient.reconfigure()
+        // 实例地址可能换了，旧实例的 SID Cookie 对新地址无效：
+        // 必须显式丢弃旧 Cookie 并让下次请求重新 bootstrap。
+        wafClient.clearCookies()
+        resetBootstrap()
     }
 
     /**
@@ -67,6 +89,31 @@ class WafRepository(
      * 而不是无信息量的 "HTTP 400"。仅当响应体无法解析时才退回状态码文案。
      */
     private suspend fun raw(path: String, params: Map<String, Any?>): WafResponse {
+        // ★ 关键：任何 API 请求发出**之前**都必须先确保 Cookie 已种下。
+        //
+        // aawaf 的安全入口中间件没有 SID Cookie 一律返回 404，而 Cookie
+        // 由bootstrap()（GET 入口页）种下。bootstrap 是一次网络往返（约 100ms），
+        // 如果不等它完成就发API，请求会抢在 Cookie 之前到达 —— 实测
+        // App 冷启动（进程被系统回收后重启）时，bootstrap 的 GET 在
+        // 09:27:39.932 发出，概览的 POST 在 09:27:39.946 就跟上了，
+        // **只隔 14ms**，Cookie 尚未种下，于是全部 404。
+        //
+        // 只在 login() 里 await bootstrap 是不够的：还有冷启动、
+        // token 过期重登、进程被系统回收后重建等路径不会经过它。
+        //
+        // bootstrap() 内部有 Mutex 串行 + bootstrapped 去重，
+        // 已种下时这里就是一次 volatile 读，几乎零开销。
+        //
+        // 例外：bootstrap 自身与 user/login 不套娃，否则自己等自己死锁 ——
+        // 由下面这个白名单显式排除。
+        //
+        // user/login     前面已串行 bootstrap 过，这里再等一次是死锁
+        // user/get_validate_code  同上（验证码要靠刚种下的 Cookie 才拿得到）
+        // user/logout    马上要登出了，Cookie 状态无关紧要，别多发一次 GET
+        if (path !in SKIP_BOOTSTRAP_PATHS) {
+            bootstrap()
+        }
+
         val resp: Response<WafResponse> = wafClient.api.post(path, params)
         val body = resp.body()
         if (body != null) return body
@@ -89,16 +136,45 @@ class WafRepository(
      * GET 后台入口页面，植入 SID Cookie（安全入口中间件要求）。
      * 必须在 IO 线程执行：OkHttp 的同步 execute() 在主线程会抛
      * NetworkOnMainThreadException，导致 Cookie 没种下、后续 /api 请求被安全入口拦成 404。
+     *
+     * ## 为什么必须「串行且去重」
+     *
+     * aawaf 的安全入口中间件要求请求带上有效 SID Cookie，**没有 Cookie 一律返回 404**
+     *（不是 401 —— 权限错误是 404，这样探测者拿不到"存在但无权限"的信号）。
+     *
+     * 原来的写法有两个问题：
+     *
+     * 1. **并发竞态**：登录成功后 `onLoggedIn()` 切到主界面，MainScreen 的
+     *    `bootstrap()` 与概览页首次 `load()` 是**并行**发起的。bootstrap 还没
+     *    种下 Cookie，概览的 7 个接口就全部 404了。表现为「刚登录进去，
+     *    概览一片报错，但顶部却显示已连接」。
+     * 2. **每次都发**：MainScreen / fetchValidateCode / login 各自调一次，
+     *    同一个会话内重复 GET 入口页，纯浪费。
+     *
+     * 现在用 [Mutex] 串行化+ [bootstrapped] 去重：第一次真正种 Cookie 并等它完成，
+     * 后续调用直接返回。配合 login() 里在返回前 await 一次，
+     * 保证「登录成功回调」发生时 Cookie 一定已经就绪。
      */
-    suspend fun bootstrap() {
+    suspend fun bootstrap() = bootstrapMutex.withLock {
+        if (bootstrapped) return@withLock
         val url = authStore.adminFull
-        if (url.isBlank()) return
+        if (url.isBlank()) return@withLock
         withContext(Dispatchers.IO) {
             runCatching {
                 val req = Request.Builder().url(url).get().build()
-                wafClient.client.newCall(req).execute().use { it.body?.bytes() }
+                wafClient.client.newCall(req).execute().use { resp ->
+                    // 入口页返回 2xx 才算 Cookie 种下成功；否则不置标记，
+                    // 下次调用还会重试（比如用户当时网络不通）。
+                    if (resp.isSuccessful) bootstrapped = true
+                    resp.body?.bytes()
+                }
             }
         }
+    }
+
+    /** 退出登录时清标记，下次登录要重新种Cookie。 */
+    private fun resetBootstrap() {
+        bootstrapped = false
     }
 
     /** 取图形验证码。返回 (validate_code_id, 图片 base64)。 */
@@ -123,6 +199,9 @@ class WafRepository(
         validateCodeId: String? = null,
         validateCode: String? = null
     ): Result<Unit> {
+        // 换实例/换会话，必须重新种 Cookie
+        wafClient.clearCookies()
+        resetBootstrap()
         bootstrap()
         val payload = mutableMapOf<String, Any?>("username" to username, "password" to password)
         if (!validateCodeId.isNullOrBlank() && !validateCode.isNullOrBlank()) {
@@ -143,6 +222,16 @@ class WafRepository(
             ?: 7200L
         authStore.saveToken(token, ttl)
         wafClient.reconfigure()
+        // 再串行确认一次 Cookie 已就绪才返回。
+        //
+        // 为什么必要：调用方拿到成功结果后会立刻 onLoggedIn() 切主界面，
+        // 概览页随即并发发起 7 个 /api 请求。而 aawaf 的安全入口中间件
+        // **没有 SID Cookie 一律 404** —— 如果此刻 Cookie 还没种下，
+        // 就会看到「顶部显示已连接、但整页数据全报错」的诡异状态。
+        //
+        // bootstrap() 内部已用 Mutex 串行化 + bootstrapped 去重，
+        // 这里再调一次：如果前面已经种成功就是空操作，否则真正补种。
+        bootstrap()
         return Result.success(Unit)
     }
 
@@ -150,6 +239,9 @@ class WafRepository(
         runCatching { raw("user/logout", emptyMap()) }
         authStore.clearSession()
         wafClient.reconfigure()
+        // 服务端会话已注销，下次登录必须重新走 bootstrap 种 Cookie
+        wafClient.clearCookies()
+        resetBootstrap()
     }
 
     /** 通用调用：返回原始响应（含 code）。 */

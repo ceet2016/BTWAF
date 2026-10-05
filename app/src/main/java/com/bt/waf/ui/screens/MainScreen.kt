@@ -2,6 +2,7 @@ package com.bt.waf.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -100,7 +101,8 @@ private val DRAWER_GROUPS = listOf(
         DrawerItem("notifications", "通知设置", Icons.Filled.NotificationsActive),
         DrawerItem("settings", "系统设置", Icons.Filled.Tune),
         DrawerItem("sysinfo", "系统信息", Icons.Filled.MonitorHeart),
-        DrawerItem("profile", "账号信息", Icons.Filled.Badge)
+        DrawerItem("profile", "账号信息", Icons.Filled.Badge),
+        DrawerItem("about", "关于作者", Icons.Filled.Info)
     ))
 )
 
@@ -138,7 +140,23 @@ fun MainScreen(onLogout: () -> Unit) {
 
     val navBackStack by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStack?.destination?.route ?: Tab.DASH.route
-    val title = ALL_TITLES[currentRoute] ?: "堡塔云WAF"
+
+    // 标题查表。
+    //
+    // 列表类子页注册的是带参数的 "list/{key}"，而
+    // `NavDestination.route` 返回的是**注册时的路由模板**，不是实际值
+    // —— 也就是 "list/{key}"，永远查不到 ALL_TITLES。
+    // 于是标题回落成默认的「堡塔云WAF」：这就是进子页后
+    // 顶部标题变成品牌名的原因（实测「拦截日志」页确实如此）。
+    //
+    // 修法：拿到 backStackEntry 的实际参数 key，去 ManagedLists 取权威title。
+    // 不硬编码映射表 —— 那样迟早跟 ListConfig 不同步。
+    val listKey = navBackStack?.arguments?.getString("key")
+    val title = remember(currentRoute, listKey) {
+        ALL_TITLES[currentRoute]
+            ?: listKey?.let { ManagedLists.byKey(it)?.title }
+            ?: "堡塔云WAF"
+    }
     val topLevel = isTopLevel(currentRoute)
 
     fun go(route: String) {
@@ -310,14 +328,38 @@ fun MainScreen(onLogout: () -> Unit) {
             topBar = {
                 TopAppBar(
                     title = {
+                        // 这里**不再显示实例地址**。
+                        // 顶部栏是每一页的公共框架，等于每张截图都会带上
+                        // 「https://81.70.19.168:8379/d75e7a5401」——
+                        // 里面含内网 IP 和后台入口路径（相当于半个凭据），
+                        // 截图发出去就是信息泄露。用户明确要求去掉。
+                        //
+                        // 改用「连接正常 + 品牌」两行：第二行显示实例**状态**
+                        // 而不是地址，既不泄露又保留了「我连的是哪台」的信息量。
+                        // 具体地址仍可在「系统 → 账号信息」里查看，那是用户
+                        // 主动去看自己配置的地方。
                         Column {
                             Text(title, style = MaterialTheme.typography.titleLarge)
-                            Text(
-                                app.authStore.webUrl.ifBlank { "未配置连接地址" },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (app.authStore.hasSession)
+                                                MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.error
+                                        )
+                                )
+                                Spacer(Modifier.width(Space.sm))
+                                Text(
+                                    if (app.authStore.hasSession) "已连接 · ${app.authStore.hostLabel}"
+                                    else "未连接",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
+                                )
+                            }
                         }
                     },
                     navigationIcon = {
@@ -381,6 +423,7 @@ fun MainScreen(onLogout: () -> Unit) {
                 composable("rules") { RulesScreen() }
                 composable("settings") { SettingsScreen() }
                 composable("profile") { ProfileScreen() }
+                composable("about") { AboutScreen() }
                 composable("notifications") { NotificationsScreen() }
                 composable("report") { ReportScreen() }
                 composable("cert") { CertScreen() }

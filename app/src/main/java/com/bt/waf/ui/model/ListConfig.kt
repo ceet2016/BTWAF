@@ -78,7 +78,21 @@ data class ListConfig(
      * true 表示删除/启停的标识是「该项在当前列表中的下标」而非列表项字段。
      * 例：exclusive/del_rules 接收 index 数组，rule_status 接收单条 index。
      */
-    val idFromPosition: Boolean = false
+    val idFromPosition: Boolean = false,
+
+    /**
+     * 自动轮询间隔（毫秒）；null = 不轮询，进入时加载一次即可。
+     *
+     * **只给「日志类」列表开**（拦截日志、IP 封禁记录、CC 事件、
+     * 规则命中、操作日志）。这些页面展示的是「刚刚发生了什么」，
+     * 静态快照没有意义 —— 用户盯着看也不会变，以为是坏了。
+     *
+     * **不给配置类列表开**（黑白名单、UA 库、区域拦截、爬虫规则……）。
+     * 那些是配置，用户随时可能正在新增/编辑；而且它们多数带分页，
+     * 轮询会把用户翻到的页码重置回第 1 页（`load()` 内部 page=1），
+     * 是实打实的体验 bug。分页保护见 ManagedListScreen 的 `page == 1` 判断。
+     */
+    val liveRefreshMillis: Long? = null
 )
 
 object ManagedLists {
@@ -361,7 +375,8 @@ object ManagedLists {
         listParams = mapOf("p" to 1, "p_size" to 50),
         titleKeys = listOf("content", "operator", "log_type", "id"),
         subtitleKeys = listOf("create_time", "uid", "id"),
-        keywordSearch = true
+        keywordSearch = true,
+        liveRefreshMillis = 8_000L
     )
 
     private val ccEvents = ListConfig(
@@ -375,7 +390,8 @@ object ManagedLists {
         keywordSearch = true,
         dateFilter = true,
         clearPath = "report/cc_list",
-        clearExtraParams = mapOf("clear" to 1)
+        clearExtraParams = mapOf("clear" to 1),
+        liveRefreshMillis = 6_000L
     )
 
     private val ipBlockLog = ListConfig(
@@ -389,7 +405,8 @@ object ManagedLists {
         keywordSearch = true,
         dateFilter = true,
         clearPath = "report/attack_report_ip_log",
-        clearExtraParams = mapOf("clear" to 1, "query_data" to "")
+        clearExtraParams = mapOf("clear" to 1, "query_data" to ""),
+        liveRefreshMillis = 6_000L
     )
 
     private val ruleHit = ListConfig(
@@ -400,7 +417,8 @@ object ManagedLists {
         titleKeys = listOf("rule_name", "server_name", "key"),
         subtitleKeys = listOf("uri", "ip", "ip_country", "rule_type", "timestimp"),
         keywordSearch = true,
-        clearPath = "report/delete_rule_hit_list"
+        clearPath = "report/delete_rule_hit_list",
+        liveRefreshMillis = 8_000L
     )
 
     private val attackLogs = ListConfig(
@@ -413,7 +431,8 @@ object ManagedLists {
         keywordSearch = true,
         dateFilter = true,
         clearPath = "report/attack_report_log",
-        clearExtraParams = mapOf("clear" to 1, "query_data" to "")
+        clearExtraParams = mapOf("clear" to 1, "query_data" to ""),
+        liveRefreshMillis = 6_000L
     )
 
     private val maliciousIp = ListConfig(
