@@ -208,8 +208,34 @@ echo "  重复张数: $DUP  (与上一张内容相同 = 点击没生效，这些
 #   - measure_top_gap：子页面顶部空一大块（内层 Scaffold 的 windowInsets 坑）
 #   - measure_cards：并排卡片左窄右宽
 #
-# ⚠️ 必须用系统 Python，workbuddy 内置的 3.13 没装 PIL。
-AUDIT_PY="C:/Users/Administrator/AppData/Local/Programs/Python/Python311/python.exe"
+# ⚠️ 必须用带 PIL 的 Python，workbuddy 内置的 3.13 没装 PIL。
+#
+# 路径不写死：换机器 / 换Python 安装位置后硬编码的路径就失效了。
+# 优先取环境变量 BTWAF_PY，其次在PATH 里找带 PIL 的 python3 / python，
+# 都找不到才退到常见的系统安装位置。
+pick_python() {
+  if [ -n "$BTWAF_PY" ]; then echo "$BTWAF_PY"; return; fi
+  for c in python3 python; do
+    if command -v "$c" >/dev/null 2>&1; then
+      if "$c" -c "import PIL" >/dev/null 2>&1; then
+        command -v "$c"; return
+      fi
+    fi
+  done
+  for c in \
+    "/c/Users/$USERNAME/AppData/Local/Programs/Python/Python311/python.exe" \
+    "/usr/bin/python3"; do
+    if [ -x "$c" ] && "$c" -c "import PIL" >/dev/null 2>&1; then echo "$c"; return; fi
+  done
+  echo ""
+}
+AUDIT_PY="$(pick_python)"
+if [ -z "$AUDIT_PY" ]; then
+  echo "!! 找不到带 PIL 的 Python。装一下：pip install Pillow"
+  echo "   或指定解释器：BTWAF_PY=/path/to/python bash tools/walk_pages.sh"
+  exit 1
+fi
+echo "像素体检使用: $AUDIT_PY"
 TOOLS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo ""

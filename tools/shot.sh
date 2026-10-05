@@ -11,7 +11,7 @@ set -uo pipefail
 export ANDROID_HOME="$HOME/.workbuddy/binaries/android/sdk"
 A="$ANDROID_HOME/platform-tools/adb.exe"
 export MSYS_NO_PATHCONV=1
-SHOTS="C:/Users/Administrator/Desktop/test/shots"
+SHOTS="${BTWAF_SHOTS:-$PWD/shots}"
 mkdir -p "$SHOTS"
 
 wake() {
