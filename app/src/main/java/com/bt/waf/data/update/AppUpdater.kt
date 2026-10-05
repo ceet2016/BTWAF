@@ -33,22 +33,33 @@ typealias DownloadProgress = (read: Long, total: Long) -> Unit
  *
  * CNB 的 `api.cnb.cool` 所有接口（`/-/git/tags`、`/-/releases`、
  * `/-/commit-assets`）**匿名一律401**，token 不能硬编码进 APK。
- * 实测唯一匿名可用的路径是 web 端：
+ * 公开仓库能匿名访问的只有两条路：
  *
  * ```
- * https://cnb.cool/<slug>/-/commit-assets/download/<ref>/<file>
+ * # ① 取分支当前 commit 的 SHA（Git smart HTTP，公开仓库免认证）
+ * https://cnb.cool/<slug>.git/info/refs?service=git-upload-pack
+ * # ② 按这个 SHA 取 commit 附件
+ * https://cnb.cool/<slug>/-/commit-assets/download/<commit_sha>/<file>
  * ```
  *
- * 它接受**分支名**作 ref，302 跳到带签名的 asset.cnb.cool。
- * 仓库 slug 与 ref 写死在这里 —— App 本来就是单仓库分发的客户端，
+ * ⚠️ **`<ref>` 必须是完整 commit SHA，不能用分支名**（实测，带分支名一律 404）：
+ * ```
+ * /-/commit-assets/download/main/version.json        → 404
+ * /-/commit-assets/download/38328bad.../version.json  → 200
+ * ```
+ * 附件是挂在**某一次commit** 上的，分支名并不指向某一份附件。
+ * 所以查版本必须分两步：先解析 SHA，再取附件 —— 多发的那个请求
+ * 只有几百字节，不影响「省流量」这个核心诉求。
+ *
+ * 仓库 slug 与分支写死在这里 —— App 本来就是单仓库分发的客户端，
  * 不需要做成可配置的，多一个输入框就多一个填错的可能。
  *
  * ## 为什么必须校验内容而不是只看 HTTP 状态码
  *
- *踩过的坑：CNB 的 `/-/raw/` 路径在文件不存在时返回 **HTTP 200 + 一张
+ * 踩过的坑：CNB 的 `/-/raw/` 路径在文件不存在时返回 **HTTP 200 + 一张
  * HTML 错误页**。只判 `response.isSuccessful` 会把错误页当成版本文件，
  * 于是解析出 versionCode = 0，比本地还"旧"，用户永远看不到更新提示。
- * 所以下面用 `isJsonObject()` 做第二道校验。
+ * 所以下面用内容格式做第二道校验。
  */
 object AppUpdater {
 
@@ -57,9 +68,16 @@ object AppUpdater {
     private const val WEB = "https://cnb.cool"
     private const val REPO_URL = "$WEB/$SLUG"
 
-    /** 版本文件与 APK 的公开下载地址。 */
-    private fun assetUrl(file: String) =
-        "$REPO_URL/-/commit-assets/download/$BRANCH/$file"
+    /** Git smart HTTP 的引用发现端点，公开仓库免认证，用来把分支名解析成 SHA。 */
+    private val refsUrl = "$WEB/$SLUG.git/info/refs?service=git-upload-pack"
+
+    /**
+     * 按 commit SHA 拼附件地址。
+     *
+     * 参数是 SHA 不是分支名 —— 见文件头注释里的实测记录。
+     */
+    private fun assetUrl(sha: String, file: String) =
+        "$REPO_URL/-/commit-assets/download/$sha/$file"
 
     private val http by lazy {
         OkHttpClient.Builder()
@@ -134,11 +152,45 @@ object AppUpdater {
     // ─────────────────────────────── 查版本（不下载 APK）
 
     /**
+     * 把分支名解析成当前的 commit SHA。
+     *
+     * 走 Git smart HTTP 的引用发现端点，公开仓库不需要任何认证。
+     * 响应是 pkt-line 行协议：
+     * ```
+     * 001e# service=git-upload-pack
+     * 0000013538328bad... HEAD\0multi_ack ... symref=HEAD:refs/heads/main ...
+     * 003d38328bad... refs/heads/main
+     * 0000
+     * ```
+     *
+     * ⚠️ **不要按行解析**：每行前 4 位是长度（十六进制），
+     * 但下一行的 `0000` 其实是**下一个包的长度字段**而不是「结束标记」。
+     * 按 `ln==0` 判定结束会立刻中断，只拿到第一行 service 声明。
+     * 正确做法是按长度游标逐包推进。
+     *
+     * 这里更简单可靠：用正则直接抓「40 位十六进制 + 空白 + 目标 ref」。
+     * 格式由 Git 协议保证，且我们只要一个固定 ref，不必真去解 pkt-line。
+     */
+    private fun resolveCommitSha(): String? {
+        val req = Request.Builder().url(refsUrl).build()
+        http.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) return null
+            val text = resp.body?.string().orEmpty()
+            val pattern = Regex("([0-9a-f]{40})\\s+refs/heads/$BRANCH\\b")
+            val sha = pattern.find(text)?.groupValues?.get(1)
+            return sha?.takeIf { it.length == 40 }
+        }
+    }
+
+    /**
      * 只拉version.json（几百字节），**不碰 APK**。
      *
      * 用户要求「不要全部下载下来更新，不然浪费流量」—— 所以顺序必须是：
      * 先比对 versionCode，确认确实有新版本才提示，APK 下载由用户点击触发。
      * 自动更新 App 的流量消耗因此与实际更新频率成正比，而不是与启动次数成正比。
+     *
+     * 两次请求都很小：第一次是 Git 引用发现（约 300 字节），
+     * 第二次是 version.json（几百字节），合计仍远小于一个安装包。
      */
     suspend fun check(): CheckResult = withContext(Dispatchers.IO) {
         // 进入 IO 线程后先检查一次协程是否已被取消。
@@ -146,10 +198,21 @@ object AppUpdater {
         //ensureActive() 是 kotlinx.coroutines 的顶层扩展，import 后可直接调。
         currentCoroutineContext().ensureActive()
         try {
-            val req = Request.Builder().url(assetUrl("version.json")).build()
+            val sha = resolveCommitSha()
+                ?: return@withContext CheckResult.Failed("无法获取仓库最新版本号")
+
+            val req = Request.Builder().url(assetUrl(sha, "version.json")).build()
             http.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) {
-                    return@withContext CheckResult.Failed("HTTP ${resp.code}")
+                    //404 单独说：附件只存在于「跑过 CI 的那个commit」上，
+                    // 用户第一次用就撞上这个是很可能的，说清楚比报错笼统有用。
+                    return@withContext CheckResult.Failed(
+                        if (resp.code == 404) {
+                            "当前提交还没有构建产物（推送后需等待 CI 完成）"
+                        } else {
+                            "HTTP ${resp.code}"
+                        }
+                    )
                 }
                 val text = resp.body?.string().orEmpty()
 
@@ -180,7 +243,7 @@ object AppUpdater {
 
                 val mine = currentVersionCode
                 if (info.versionCode > mine) {
-                    CheckResult.Available(info, assetUrl(info.apkName))
+                    CheckResult.Available(info, assetUrl(sha, info.apkName))
                 } else {
                     CheckResult.UpToDate("$currentVersionName ($mine)")
                 }
