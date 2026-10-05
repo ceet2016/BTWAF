@@ -97,6 +97,19 @@ release 签名，两者可以互相覆盖安装。
 推送 `main` 后 [.cnb.yml](.cnb.yml) 自动构建 release APK，并把
 **版本文件**与**安装包**一起上传为 commit 附件。
 
+> ⚠️ **构建约需 6~8 分钟**（实测 `build-release-apk` 阶段 330~450 秒）。
+> 附件要等 `upload-assets` 阶段结束才存在，所以 **push 之后的近 8 分钟里，
+> 下面的下载地址一律返回 404**，而此时构建状态是 `pending` 而非 `error`——
+> 很容易误判成「CI 坏了」。查真实状态要用已登录的 cnb CLI：
+>
+> ```bash
+> cnb build get-build-logs  --repo unicom/BTWAF --page-size 5
+> cnb build get-build-status --repo unicom/BTWAF --sn <构建号>
+> ```
+>
+> `api.cnb.cool` 的构建接口用仓库 git PAT 是读不到的（返 `errcode:5`），
+> 别在那上面反复试探。
+
 附件挂在**某一次 commit** 上，`<ref>` 必须是完整 commit SHA，用分支名会 404：
 
 ```

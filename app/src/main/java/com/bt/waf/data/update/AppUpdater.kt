@@ -208,7 +208,8 @@ object AppUpdater {
                     // 用户第一次用就撞上这个是很可能的，说清楚比报错笼统有用。
                     return@withContext CheckResult.Failed(
                         if (resp.code == 404) {
-                            "当前提交还没有构建产物（推送后需等待 CI 完成）"
+                            "当前提交还没有构建产物。推送后需等待 CI 完成，" +
+                                "实测约需 6~8 分钟，请稍后再试"
                         } else {
                             "HTTP ${resp.code}"
                         }

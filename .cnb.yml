@@ -23,6 +23,16 @@
 # 4. **用 release 签名而非 debug 签名**
 #    在线更新时系统会比对签名，不一致直接 INSTALL_FAILED_UPDATE_INCOMPATIBLE。
 #    debug 密钥每台机器/每个容器都不同，所以 CI 必须用 release 签名。
+#
+# 5. ⚠️ 看到「附件 404 / 构建失败」先看构建状态，别急着改配置
+#    这个流水线的 build-release-apk 实测耗时 **330~450 秒（约 6~8 分钟）**，
+#    附件要等 upload-assets 阶段结束才存在。也就是说 push 之后的近 8 分钟里，
+#    commit-assets 链接**一律返回 404**，而此时构建状态是 pending，不是 error。
+#    极容易误判成「CI 坏了」，白改一堆配置。
+#    正确查法（cnb CLI 需要已登录）：
+#      cnb build get-build-logs  --repo unicom/BTWAF --page-size 5
+#      cnb build get-build-status --repo unicom/BTWAF --sn <构建号>
+#    看 status 是 success / error / pending，以及各stage 的耗时。
 
 main:
   push:
@@ -155,7 +165,9 @@ $:
             fi
             $GRADLE_BIN assembleRelease --no-daemon --stacktrace
             cp "$(ls app/build/outputs/apk/release/*.apk | head -1)" btwaf-latest.apk
-            SIZE=$(stat -c%s btwaf-latest.apk)
+            # 与 main:push 保持一致：stat 的 -c 是 GNU 扩展，busybox 上没有，
+            # 会报 "invalid option -- c"。wc -c 是 POSIX，谁都支持。
+            SIZE=$(wc -c < btwaf-latest.apk | tr -d ' ')
             SHA=$(sha256sum btwaf-latest.apk | cut -d' ' -f1)
             cat > version.json <<JSON
             {
