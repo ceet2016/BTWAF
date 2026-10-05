@@ -78,7 +78,9 @@ main:
             echo "产物: $APK"
             cp "$APK" btwaf-latest.apk
 
-            SIZE=$(stat -c%s btwaf-latest.apk)
+            # 用 wc -c 而不是 stat -c%s：stat 的 GNU 扩展在 busybox 上没有，
+            # 会直接报 "invalid option -- c"。wc -c 是 POSIX，谁都支持。
+            SIZE=$(wc -c < btwaf-latest.apk | tr -d ' ')
             SHA=$(sha256sum btwaf-latest.apk | cut -d' ' -f1)
 
             cat > version.json <<JSON
@@ -93,6 +95,12 @@ main:
             JSON
             echo "== version.json =="
             cat version.json
+            # 把下载链接打进构建日志：附件页入口很深，日志是唯一能一眼看到
+            # 「产物到底传上去了没有」的地方（附件传失败时这里依然会打印，
+            # 所以还要以附件实际可下载为准，别被这行误导）。
+            echo "== 下载地址 =="
+            echo "https://cnb.cool/${CNB_REPO_SLUG}/-/commit-assets/download/${CNB_COMMIT}/version.json"
+            echo "https://cnb.cool/${CNB_REPO_SLUG}/-/commit-assets/download/${CNB_COMMIT}/btwaf-latest.apk"
 
         - name: upload-assets
           image: cnbcool/attachments:latest
@@ -121,6 +129,19 @@ $:
         CI_KEY_ALIAS: $CI_KEY_ALIAS
         CI_KEY_PASSWORD: $CI_KEY_PASSWORD
       stages:
+        # ⚠️ 必须先建 Release：官方附件插件文档写明
+        # 「上传 release 附件**需要已经存在 tag, 并且有创建过 release**」。
+        # 没有这个 stage 时附件上传会失败，而前面的 build 阶段照样绿灯 ——
+        # 又是「构建成功但产物不存在」。
+        #
+        # 语法是 `type: git:release` + `options`（内置任务，不是 docker 镜像，
+        # 所以不能写 image）。tag_push 下不传 tag，会自动取触发事件的 tag 名。
+        - name: create-release
+          type: git:release
+          options:
+            title: 堡塔云 WAF 安卓端
+            description: 由 tag 触发的自动构建产物。
+            latest: true
         - name: build
           script: |
             set -e
