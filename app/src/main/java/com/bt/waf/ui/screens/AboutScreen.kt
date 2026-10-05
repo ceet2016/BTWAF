@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Person
@@ -58,6 +59,13 @@ private const val AUTHOR_SITE = "https://uniomo.com"
  * 两处必须是同一个地址，否则「关于」页点进去和「检查更新」查的不是一回事。
  */
 private const val REPO_SITE = "https://cnb.cool/unicom/BTWAF"
+
+/**
+ * Release 下载页。手动下载安装包的用户走这里，而不是 commit 附件页——
+ * commit 附件是 App 在线更新用的，URL 里要带 40 位 SHA，对人不友好；
+ * Release 有固定tag 名和可视页面。
+ */
+private const val RELEASES_SITE = "$REPO_SITE/-/releases"
 
 /**
  * 「关于作者」页。
@@ -158,6 +166,14 @@ fun AboutScreen() {
                 label = "源码仓库",
                 value = REPO_SITE,
                 onClick = { openUrl(REPO_SITE) }
+            )
+            // 放在「作者」卡里而不是另开一个分区：这里本来就是用户
+            // 找仓库、看版本的入口，Release 页紧挨着源码仓库最自然。
+            LinkRow(
+                icon = Icons.Filled.Download,
+                label = "下载安装包",
+                value = RELEASES_SITE,
+                onClick = { openUrl(RELEASES_SITE) }
             )
         }
 

@@ -83,8 +83,8 @@ android {
         targetSdk = 34
         // versionCode 与 versionName 单一来源：CI 会读这两个值生成 version.json，
         // App 的在线更新就是比对远端 versionCode。**改版本号只改这里一处。**
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.2.1"
     }
 
     signingConfigs {

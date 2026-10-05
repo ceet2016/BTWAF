@@ -94,11 +94,45 @@ release 签名，两者可以互相覆盖安装。
 
 ### 自动化构建与在线更新
 
-推送 `main` 后 [.cnb.yml](.cnb.yml) 自动构建 release APK，并把
-**版本文件**与**安装包**一起上传为 commit 附件。
+**两条流水线，各管一类产物**，用途不同、都已实测通过：
 
-> ⚠️ **构建约需 6~8 分钟**（实测 `build-release-apk` 阶段 330~450 秒）。
-> 附件要等 `upload-assets` 阶段结束才存在，所以 **push 之后的近 8 分钟里，
+| 触发 | 产物位置 | 用途 | 构建耗时 |
+|---|---|---|---|
+| push `main` | commit 附件 | App 在线更新的检查源 | 122~441 秒 |
+| push tag（如 `v1.2.0`） | **Release** 附件 | 给用户手动下载的正式版 | 194 秒 |
+
+#### 一、手动下载（Release）
+
+打tag 即可自动生成 Release，无需手动传文件：
+
+```bash
+git tag -a v1.2.0 -m "堡塔云 WAF 安卓端 v1.2.0"
+git push origin v1.2.0
+```
+
+流水线会依次执行 `create-release`（`type: git:release` 内置任务）
+→ `build` → `upload-release-assets`。完成后：
+
+- 页面入口：<https://cnb.cool/unicom/BTWAF/-/releases>
+- 直链（匿名可下，**无需登录**）：
+
+```
+https://cnb.cool/unicom/BTWAF/-/releases/download/<tag>/btwaf-latest.apk
+https://cnb.cool/unicom/BTWAF/-/releases/download/<tag>/version.json
+```
+
+> 路径必须是 `/-/releases/download/<tag>/<file>`。
+> `/-/releases/<tag>/download/<file>` 会返回 **HTTP 200 +一张 HTML 页面**
+> （`text/html`），下载下来是个打不开的网页，不是APK —— 判状态码会误判成成功。
+
+#### 二、App 在线更新（commit 附件）
+
+推送 `main` 后 [.cnb.yml](.cnb.yml) 自动构建 release APK，并把
+**版本文件**与**安装包**一起上传为 commit 附件。App 靠它匿名查版本，
+所以这一份**必须挂在 commit 上**（Release 附件要 tag 才有，而 tag 不常打）。
+
+> ⚠️ **构建约需 2~8 分钟**（实测 122s 缓存命中 / 330~441s 冷构建）。
+> 附件要等`upload-assets` 阶段结束才存在，所以 **push 之后的这 2~8 分钟里，
 > 下面的下载地址一律返回 404**，而此时构建状态是 `pending` 而非 `error`——
 > 很容易误判成「CI 坏了」。查真实状态要用已登录的 cnb CLI：
 >
@@ -116,6 +150,10 @@ release 签名，两者可以互相覆盖安装。
 https://cnb.cool/unicom/BTWAF/-/commit-assets/download/<commit_sha>/version.json
 https://cnb.cool/unicom/BTWAF/-/commit-assets/download/<commit_sha>/btwaf-latest.apk
 ```
+
+> 同一次构建的两份产物**字节不完全相同、sha256 也不同**——tag 流水线在独立
+> 容器里重新构建，APK 内嵌构建时间戳。两者签名一致，都能覆盖安装，
+> 这是正常现象，不是产物不一致的bug。
 
 `version.json` 形如：
 
