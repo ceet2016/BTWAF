@@ -54,8 +54,13 @@ class SettingsViewModel(private val repo: WafRepository) : ViewModel() {
                 basicAuth = raw["basic_auth"].asMap()
                 apiInfo = raw["apiinfo"].asMap()
                 syslog = raw["syslog"].asMap()
-                twoStepAuth = raw["two_step_auth"] == true ||
-                    raw["two_step_auth"].asBool()
+                // 只用 asBool()，不再叠加 `== true`：
+                // 后端当前返回的是真Boolean，但 aawaf 不同版本 / 不同字段
+                // 混用 0/1 与 true/false 是常态（Go 侧 `bool` 与 `int` 标签
+                // 混用时序列化结果就会变）。asBool() 对两种都成立，
+                // 多写一个 `== true` 只是冗余分支，还会让人误以为
+                // 这里必须靠类型判断才能工作。
+                twoStepAuth = raw["two_step_auth"].asBool()
                 port = raw["port"]?.toString() ?: ""
             } catch (e: Exception) {
                 error = e.message

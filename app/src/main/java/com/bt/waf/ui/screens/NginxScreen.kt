@@ -26,6 +26,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bt.waf.WafApplication
 import com.bt.waf.ui.components.*
 import com.bt.waf.ui.theme.Space
+import com.bt.waf.util.asBool
 import com.bt.waf.util.asList
 import com.bt.waf.util.asMap
 import com.bt.waf.util.asString
@@ -1389,7 +1390,9 @@ private fun DomainProbeDialog(vm: NginxViewModel, siteId: String, onDismiss: () 
 
         if (result.isNotEmpty()) {
             Spacer(Modifier.height(Space.md))
-            val ok = result["status"] == true
+            // asBool() 而不是 `== true`：实测后端当前返回真Boolean
+            // （{"status":false,...}），但跨版本可能给 0/1。
+            val ok = result["status"].asBool()
             SectionHeader(
                 "探测结果",
                 subtitle = if (ok) "通过" else "未通过",
@@ -2732,7 +2735,14 @@ private fun cipherOptions(m: Map<String, Any?>): String = when (val c = m["ssl_c
 private fun fmtStamp(v: Any?): String {
     if (v == null) return ""
     if (v is Number) {
-        val ms = if (v.toLong() < 100_000_000_000L) v.toLong() * 1000 else v.toLong()
+        // 走 asString() 而不是 toDouble().toLong()：
+        // asString() 内部已做「整值 Double 归一化 + 超出 Long 范围退回
+        // toString()」的双重保护。直接 toLong() 的话，1e19 这种越界值会
+        // 被静默转成 Long.MIN_VALUE（-9223372036854775808），
+        // formatTime 再一格式化就成了负数时间戳。
+        val s = v.asString()
+        val n = s.toLongOrNull() ?: return s
+        val ms = if (n < 100_000_000_000L) n * 1000 else n
         return formatTime(ms)
     }
     val s = v.asString()

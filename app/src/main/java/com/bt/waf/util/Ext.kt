@@ -23,13 +23,23 @@ import kotlin.math.floor
 fun Any?.asString(): String = when (this) {
     null -> ""
     is String -> this
-    is Double -> if (isFinite() && floor(this) == this) {
-        //2.0.toLong() 而不是 toInt()：LongSite 之类的字段可能超 32 位
+    is Double -> if (isFinite() && floor(this) == this &&
+        this >= -9.223372036854776E18 && this <= 9.223372036854776E18
+    ) {
+        // toLong() 而不是 toInt()：LongSite 之类的字段可能超 32 位。
+        // 越界值退回 toString()：Double.toLong() 对超范围值返回
+        // Long.MIN_VALUE，静默变成 -9223372036854775808 是更糟的结果。
         toLong().toString()
     } else {
         toString()
     }
-    is Float -> if (isFinite() && floor(this) == this) toLong().toString() else toString()
+    is Float -> if (isFinite() && floor(this) == this &&
+        this >= -9.223372036854776E18 && this <= 9.223372036854776E18
+    ) {
+        toLong().toString()
+    } else {
+        toString()
+    }
     is Number -> this.toString()
     is Boolean -> this.toString()
     else -> this.toString()
@@ -38,11 +48,29 @@ fun Any?.asString(): String = when (this) {
 fun Map<*, *>.s(key: String): String =
     (this[key] ?: this[key.lowercase()] ?: this[key.uppercase()])?.asString() ?: ""
 
-fun Map<*, *>.i(key: String): Int =
-    (this[key]?.let { if (it is Number) it.toDouble().toInt() else it.toString().toIntOrNull() } ?: 0)
+// ⚠️ 不要直接 `toDouble().toInt()`：Double→Int 超出范围时**静默饱和**
+// （返回 Int.MAX_VALUE / Int.MIN_VALUE），1e18 会变成 2147483647。
+// 业务上这几乎不可能出现，但真出现时症状是「计数突然变成 21亿」，
+// 排查成本极高，所以显式判一次Int 边界。
+fun Map<*, *>.i(key: String): Int {
+    val v = this[key] ?: return 0
+    if (v is Number) {
+        val d = v.toDouble()
+        if (!d.isFinite() || d > Int.MAX_VALUE || d < Int.MIN_VALUE) return 0
+        return d.toInt()
+    }
+    return v.toString().trim().toIntOrNull() ?: 0
+}
 
-fun Map<*, *>.l(key: String): Long =
-    (this[key]?.let { if (it is Number) it.toDouble().toLong() else it.toString().toLongOrNull() } ?: 0L)
+fun Map<*, *>.l(key: String): Long {
+    val v = this[key] ?: return 0L
+    if (v is Number) {
+        val d = v.toDouble()
+        if (!d.isFinite() || d > Long.MAX_VALUE || d < Long.MIN_VALUE) return 0L
+        return d.toLong()
+    }
+    return v.toString().trim().toLongOrNull() ?: 0L
+}
 
 /**
  * 把后端的开关值解析成 Boolean。
@@ -63,6 +91,43 @@ fun Any?.asBool(): Boolean = when (this) {
         t == "1" || t.equals("true", ignoreCase = true) || t.equals("on", true) ||
             t.equals("yes", true) || t.equals("open", true)
     }
+}
+
+/**
+ * 数字转成**JSON 字面量**，不带多余的小数尾巴。
+ *
+ * Gson 把 JSON 数字解成 Double，回传时`1.0.toString()` 给的是 `"1.0"`。
+ * 后端 Go 侧若用 `int` /`int64` 接收，收到 `"1.0"` 要么类型报错、
+ * 要么被静默截断 —— 而这类问题在 App 里完全看不出症状，
+ * 只表现为「改了配置没生效」，极难排查。
+ *
+ * 所以凡是**要提交给后端的数字**（自己拼 JSON 时）都必须过这里：
+ * 整值输出 `"1"`、`"0"`、`"1234567890123"`；非整值保持 `"1.5"`。
+ *
+ * 精度：`toLong()` 而不是 `toInt()`，10 位以上的时间戳不会被截断。
+ *
+ * ⚠️ 越界值必须退回 `toString()` 而不是硬转：整值 Double 一旦超出
+ * Long 范围（比如 `1e19`），`toLong()` 的结果是Long.MIN_VALUE，
+ * 会把一个巨大的数静默变成 -9223372036854775808 —— 那才是真的数据损坏。
+ * 这种值本来也不可能是后端的 int/int64，退回 `"1.0E19"` 至少还能被Go
+ * 的 float64 接住，不会静默改数。
+ *
+ * ⚠️ 这里的守卫是 **Long 边界（±9.22e18）**，不是 2^53精度边界。
+ * 早先误用 2^53 守卫，结果 `1e18` 落到else 分支输出 `"1.0E18"`，
+ * 而 Go 侧 `strconv.ParseInt("1e18", 10, 64)` 会直接解析失败 ——
+ * 守卫缩小了覆盖范围，反而把本来能正常传的整数值弄坏了。
+ */
+fun Any?.asJsonNumber(): String = when (this) {
+    is Double -> if (isFinite() && floor(this) == this &&
+        this >= -9.223372036854776E18 && this <= 9.223372036854776E18
+    ) {
+        toLong().toString()
+    } else {
+        toString()
+    }
+    is Float -> if (isFinite() && floor(this) == this) toLong().toString() else toString()
+    is Number -> toString()
+    else -> toString()
 }
 
 /** 按候选键顺序取第一个非空字符串，用于列表项标题/副标题的容错展示。 */

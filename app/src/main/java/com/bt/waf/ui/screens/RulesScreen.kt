@@ -206,16 +206,26 @@ private val RV_METHOD_FALLBACK = listOf(
 
 /* ─────────────────────────── 值渲染工具 ─────────────────────────── */
 
-private fun rvInt(v: Any?): Int = when (v) {
-    is Number -> v.toInt()
-    null -> 0
-    else -> v.toString().trim().toIntOrNull() ?: 0
+// 走 Double 通道而不是 toInt()：Gson 解出来的数字是 Double，
+// Double.toInt() 在超出范围时**静默饱和成 Int.MAX_VALUE**。
+// 规则排序值、命中数这类字段真出现超大值时，症状是「计数变21亿」，
+// 极难排查，所以显式判一次边界。
+private fun rvInt(v: Any?): Int {
+    if (v is Number) {
+        val d = v.toDouble()
+        if (!d.isFinite() || d > Int.MAX_VALUE || d < Int.MIN_VALUE) return 0
+        return d.toInt()
+    }
+    return v?.toString()?.trim()?.toIntOrNull() ?: 0
 }
 
-private fun rvLong(v: Any?): Long = when (v) {
-    is Number -> v.toLong()
-    null -> 0L
-    else -> v.toString().trim().toLongOrNull() ?: 0L
+private fun rvLong(v: Any?): Long {
+    if (v is Number) {
+        val d = v.toDouble()
+        if (!d.isFinite() || d > Long.MAX_VALUE || d < Long.MIN_VALUE) return 0L
+        return d.toLong()
+    }
+    return v?.toString()?.trim()?.toLongOrNull() ?: 0L
 }
 
 /** 把任意层级的节点转成 Map；不是 Map 时返回空 map，调用方不用判空。 */

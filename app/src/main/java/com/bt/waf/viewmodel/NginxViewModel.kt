@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bt.waf.data.repo.WafRepository
+import com.bt.waf.util.asBool
 import com.bt.waf.util.asList
 import com.bt.waf.util.asMap
 import com.bt.waf.util.asString
@@ -1273,7 +1274,9 @@ class NginxViewModel(private val repo: WafRepository) : ViewModel() {
     fun getReplaceOpen(siteId: String, onError: (String?) -> Unit = {}) {
         if (!requireSiteId(siteId, onError)) return
         query("nginx/get_replace_open", mapOf("site_id" to siteId), onError) {
-            replaceOpen = it.asMap()["replace_open"] == true
+            // asBool() 而不是 `== true`：实测本实例返回真Boolean，
+            // 但换版本可能给 0/1，asBool() 两种都吃得住。
+            replaceOpen = it.asMap()["replace_open"].asBool()
         }
     }
 

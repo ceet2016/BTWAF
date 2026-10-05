@@ -1799,7 +1799,10 @@ private fun cwPrettyEntryJson(res: Map<String, Any?>): String {
 private fun cwToJson(value: Any?): String = when (value) {
     null -> "null"
     is String -> "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
-    is Number, is Boolean -> value.toString()
+    // 数字走 asJsonNumber()：Gson 解出来的整数是 1.0，
+    // 直接 toString() 会把 "1" 写成 "1.0" 提交给后端，
+    // Go 侧 int/int64 字段收到后要么报错要么被静默截断。
+    is Number, is Boolean -> value.asJsonNumber()
     is List<*> -> value.joinToString(",", "[", "]") { cwToJson(it) }
     is Map<*, *> -> value.entries.joinToString(",", "{", "}") { (k, v) ->
         "\"" + k.toString().replace("\"", "\\\"") + "\":" + cwToJson(v)
