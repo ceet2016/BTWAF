@@ -5,6 +5,7 @@
 
 - 源码仓库：<https://cnb.cool/unicom/BTWAF>
 - 作者：雨落秋垣 · <https://uniomo.com>
+- 归档文档：[ARCHIVE.md](ARCHIVE.md) —— 交付物清单、模块覆盖、发版流程、本机构建环境
 
 ## 界面
 
