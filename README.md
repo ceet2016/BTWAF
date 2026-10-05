@@ -6,6 +6,15 @@
 - 源码仓库：<https://cnb.cool/unicom/BTWAF>
 - 作者：雨落秋垣 · <https://uniomo.com>
 
+## 界面
+
+<p align="center">
+  <img src="docs/screenshot-login.jpg" width="32%" alt="登录页" />
+  <img src="docs/screenshot-drawer.jpg" width="32%" alt="侧边抽屉导航" height="800" />
+</p>
+
+<p align="center"><sub>左：登录页—— 服务器地址一律由使用者自行填写，App 不预填任何示例地址。<br>右：侧边抽屉导航，按「攻击分析 / 防护策略 / 黑白名单 / 访问控制 / 证书与集群 / 用户与系统」分组。</sub></p>
+
 ## 一、技术栈
 
 | 项 | 版本 / 选型 |
