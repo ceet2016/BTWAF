@@ -16,7 +16,6 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
@@ -27,7 +26,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -36,6 +37,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.bt.waf.R
 import com.bt.waf.WafApplication
 import com.bt.waf.ui.components.ErrorBannerFlush
 import com.bt.waf.ui.components.PrimaryButton
@@ -114,7 +116,16 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
                         .padding(top = 72.dp, bottom = 30.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // 徽标：白色圆角方 + 主色盾牌，与桌面图标同一套形状语言
+                    // 徽标：直接用 launcher 的前景图资源（ic_launcher_foreground），
+                    // 而不是在这里用 Icon() 重画一个盾牌。
+                    //
+                    // ⚠️ 之前这里是 `Icon(Icons.Filled.Shield)` 硬画的白底蓝盾，
+                    // 结果桌面图标换新后登录页还是老样子 —— 两套图形各画各的，
+                    // 必然漂移。改成读同一张图，登录页与桌面图标就永远同源。
+                    //
+                    // 用前景层（透明底PNG）而不是 ic_launcher（带底色的成品），
+                    // 是因为这里的底色由外层 Box 提供（半透明白 + 纯白两层），
+                    // 和自适应图标一致，视觉上才对得上。
                     Box(
                         Modifier
                             .size(72.dp)
@@ -122,20 +133,12 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
                             .background(Color.White.copy(alpha = 0.18f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color.White),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Filled.Shield,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(30.dp)
-                            )
-                        }
+                        Image(
+                            painterResource(R.mipmap.ic_launcher_foreground),
+                            contentDescription = null,
+                            modifier = Modifier.size(66.dp),
+                            contentScale = ContentScale.Fit
+                        )
                     }
 
                     Spacer(Modifier.height(Space.lg))
@@ -337,7 +340,10 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
             )
             Spacer(Modifier.height(Space.lg))
             Text(
-                "作者 雨落秋垣 · 源码 cnb.cool",
+                // 指向**具体仓库**而不是 cnb.cool 首页：
+                // 首页对用户没有意义，而这是登录前唯一能点开的地方，
+                // 让人一眼确认「这个 App 从哪来、代码是否公开」。
+                "作者 雨落秋垣 · 源码 cnb.cool/unicom/BTWAF",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center

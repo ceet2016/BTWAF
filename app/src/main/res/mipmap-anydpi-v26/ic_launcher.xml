@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-    <!-- 自适应图标：前景是盾牌+拒止横杠，底色纯品牌蓝。
+    <!-- 自适应图标：前景是「白盾 + 蓝B 骨架 + 橙闪电」，底色深蓝。
          内容必须落在中心 66% 安全区内，否则会被各家 Launcher
          的圆形/水滴形遮罩裁掉。
-         monochrome 是单独画的剪影（横杠与虚线挖空成透明），
-         Android 13+ 主题图标只取alpha 通道着色，直接复用彩色前景会退化成实心盾。 -->
+         monochrome 是单独画的剪影（B 与闪电镂空成透明、碗内腔保留实心），
+         Android 13+ 主题图标只取 alpha 通道着色，直接复用彩色前景会退化成实心盾。 -->
     <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
         <background android:drawable="@color/ic_launcher_background" />
         <foreground android:drawable="@mipmap/ic_launcher_foreground" />

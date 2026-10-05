@@ -3,20 +3,36 @@
 """
 生成 App 图标（全套 mipmap + adaptive icon）。
 
-设计：盾牌 + 数据流入 + 拒止横杠，「WAF 挡攻击」的直白隐喻。
+## 设计：深蓝渐变底 + 双层盾 + 橙色「拒止闪电」
+
+上一版是「蓝底 + 白盾 + 橙横杠 + 数据流虚线」，看着像**任何**一个安全类
+App：盾牌这个隐喻已经被用烂了，桌面上十几屏分不出谁是谁。
+这一版换思路，靠三个特征拿辨识度：
+
+1. **盾形从纯白改为「白色主体 + 蓝色内芯」的双层结构** ——
+   单色盾太单薄，双层套色在小尺寸下也能看出层次。
+2. **内芯是「BT」的 B 骨架** —— 字母是天然的辨识锚点，
+   比抽象图形更容易被记住，也让「WAF 客户端」这层身份落到实处。
+3. **橙色的闪电而不是横杠** —— 横杠是「禁止」，闪电是「拦截正在发生」，
+   动态感更强，斜向造型在小尺寸下也更有张力。
+
 配色沿用 App 主题的 BrandBlue #2563EB，保证桌面图标与 App 内界面同色系。
 
-产出：
+## 产出
+
   mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher.png        栅格图标（带圆角底）
   mipmap-{...}/ic_launcher_round.png                            圆形图标
   mipmap-{...}/ic_launcher_foreground.png                       自适应图标前景（透明底）
+  mipmap-{...}/ic_launcher_monochrome.png                       主题图标剪影层
   mipmap-anydpi-v26/ic_launcher.xml + ic_launcher_round.xml      自适应图标声明
-  values/ic_launcher_background.xml自适应图标底色
+  values/ic_launcher_background.xml                              自适应图标底色
 
-为什么自己画而不用 ImageGen：
-  自适应图标对**安全区**有硬要求 —— 前景内容必须落在中心 66% 内，
-  否则会被各家Launcher 的圆形/水滴形遮罩裁掉。生成模型控不住这个。
-  矢量化的盾形+横杠也远比位图清晰，各密度放大不糊。
+## 为什么自己画而不用 ImageGen
+
+自适应图标对**安全区**有硬要求 —— 前景内容必须落在中心 66% 内，
+否则会被各家 Launcher 的圆形/水滴形遮罩裁掉。生成模型控不住这个，
+出图必然要人工试错裁切。矢量化的盾形 + 字母骨架也远比位图清晰，
+各密度放大不糊。**这一点是硬约束，不是风格偏好。**
 """
 import math
 from pathlib import Path
@@ -24,10 +40,10 @@ from PIL import Image, ImageDraw
 
 # ── 主题色（与 ui/theme/Theme.kt 的 BrandBlue 一致）──────────────────
 BRAND = (37, 99, 235)        # #2563EB 主蓝
-BRAND_DARK = (30, 78, 189)   # 底渐变深端
-BRAND_LIGHT = (96, 165, 250) # #60A5FA 亮蓝
+BRAND_DARK = (16, 42, 110)   # 底渐变深端：比上一版更深，衬托白盾更跳
+BRAND_LIGHT = (59, 130, 246) # 顶渐变亮端
 WHITE = (255, 255, 255)
-ACCENT = (249, 115, 22)      # #F97316 橙，用于「拒止」横杠
+ACCENT = (249, 115, 22)      # #F97316 橙，用于「拦截」闪电
 
 RES = Path("app/src/main/res")
 
@@ -126,34 +142,70 @@ def shield_mask(S, cx, cy, w, h):
     return m
 
 
-def draw_inner(d, cx, cy, w, h, S, bar_fill, dash_fill):
-    """画盾形内部的元素：拒止横杠 + 上下数据流虚线。
+def draw_inner(d, cx, cy, w, h, S, bar_fill, ink, carve):
+    """画盾形内部元素：品牌蓝「B」骨架 + 橙色拦截闪电。
 
-    虚线**必须**画在盾内（调用方按盾形遮罩裁剪），而且排布要避开
-    盾形下半的收窄段：盾形腰部以下宽度快速收缩，虚线离横杠越远、
-    离中轴越远，就越容易被边缘削掉半截，看起来像 bug 而不像设计。
-    所以这里只用「上二下一」三排，并把横向间距收窄。
+    ## 为什么要用字母而不是抽象图形
+
+    上一版是「横杠 + 虚线」，在 48px 的 mdpi 上就是**一个蓝底方块里两三条线**，
+    缩到桌面图标实际尺寸后完全看不出是什么。
+    字母 B 的识别度在小尺寸下远高于抽象符号 —— 它有直边、有两个确定的
+    圆弧轮廓，即使只剩十几个像素也能认出「是个 B」，
+    用户由此记住「BTWAF 的图标是个 B」。
+
+    ## 参数为什么是三个颜色而不是两个
+
+    之前 ink 与挖空色共用一个 `dash_fill`，结果两个值**完全相同** ——
+    B 是蓝的，碗里填的也是蓝的，碗等于没挖：B 直接退化成一个蓝色实心块。
+    所以 ink（字母）与 carve（碗内）必须独立传入：
+      - 彩色版：ink=品牌蓝，carve=白（露出盾体）
+      - monochrome：ink=白，carve=黑（alpha 挖空，见 make_monochrome）
     """
-    bar_w = w * 0.44
-    bar_h = max(2, int(S * 0.055))
-    bar_y = cy - h * 0.02
+    bw = w * 0.50
+    bh = h * 0.42
+    bcy = cy - h * 0.10
+    left = cx - bw / 2
+    # 主竖干粗细按比例算，不用固定像素 —— 否则小尺寸下会糊成一片
+    stem = bw * 0.27
+
+    # 竖干
     d.rounded_rectangle(
-        [cx - bar_w / 2, bar_y - bar_h / 2, cx + bar_w / 2, bar_y + bar_h / 2],
-        radius=bar_h / 2, fill=bar_fill
+        [left, bcy - bh / 2, left + stem, bcy + bh / 2],
+        radius=stem * 0.30, fill=ink
     )
 
-    # 上二下一：横杠把数据流拦腰截断，视觉上就是「攻不进来」
-    dash_w = w * 0.15
-    gap = bar_h * 1.9
-    for i, dy in enumerate((-2.4, -1.6, 1.6)):
-        y = bar_y + gap * dy
-        col = dash_fill(150 if i % 2 == 0 else 105)
-        for sx in (-1, 1):
-            cxr = cx + sx * (bar_w / 2 + dash_w * 0.5)
-            d.rounded_rectangle(
-                [cxr - dash_w / 2, y - bar_h * 0.34, cxr + dash_w / 2, y + bar_h * 0.34],
-                radius=bar_h * 0.34, fill=col
-            )
+    # 两个碗：上碗略小、下碗略大，符合 B 的视觉重心。
+    # 先画实心碗（蓝），再用 carve 色画内腔把它挖空——
+    # 两步法比直接拼环形更可控，边缘不会出现多边形自交造成的斜切。
+    #
+    # 半径系数经过实测调整：bowl 0.34/0.38 + r_in 0.52 那一版，
+    # 下碗的外沿几乎顶到盾形边缘，盾的白色只剩一圈，字母显得又肥又挤。
+    # 收小到 0.34/0.38 之后，盾内留出了明确的白色呼吸区。
+    for frac, cyr in ((0.34, bcy - bh * 0.25), (0.38, bcy + bh * 0.25)):
+        r_out = bw * frac
+        r_in = r_out * 0.46
+        d.ellipse([left + stem - r_out * 0.30, cyr - r_out,
+                   left + stem + r_out * 1.85, cyr + r_out], fill=ink)
+        d.ellipse([left + stem + r_out * 0.26, cyr - r_in,
+                   left + stem + r_out * 0.26 + r_in * 2.0, cyr + r_in], fill=carve)
+
+    # 橙色闪电：斜跨右下角。
+    # ⚠️ 位置必须**避开盾形的收窄段**：盾牌腰部以下宽度快速收缩，
+    # 闪电放在 zy1 = cy + h*0.34 时，末梢会正好压在盾形边缘上，
+    # 被裁成一条贴着轮廓的粗线（第一版就是这么废掉的）。
+    # 往上收到 0.24、并缩小 zw，看起来才是「浮在盾里」而不是「卡在边上」。
+    zx = cx + w * 0.30
+    zy0 = cy + h * 0.04
+    zy1 = cy + h * 0.24
+    zw = w * 0.11
+    d.polygon([
+        (zx + zw, zy0),
+        (zx - zw * 0.15, zy0 + (zy1 - zy0) * 0.50),
+        (zx + zw * 0.60, zy0 + (zy1 - zy0) * 0.50),
+        (zx - zw * 0.70, zy1),
+        (zx + zw * 0.15, zy0 + (zy1 - zy0) * 0.60),
+        (zx - zw * 0.80, zy0 + (zy1 - zy0) * 0.60),
+    ], fill=bar_fill)
 
 
 def make_foreground(size, with_bg=False, circle=False):
@@ -200,8 +252,9 @@ def make_foreground(size, with_bg=False, circle=False):
     draw_inner(
         ImageDraw.Draw(inner), cx, cy, w, h, S,
         bar_fill=ACCENT,
-        dash_fill=(lambda a: lerp(WHITE, BRAND, 0.25) + (a,)) if with_bg
-                  else (lambda a: BRAND + (a,)),
+        # 彩色版：B 是品牌蓝（压在白盾上），碗里填白露出盾体。
+        ink=BRAND + (255,),
+        carve=WHITE + (255,),
     )
     inner.putalpha(Image.composite(inner.split()[3], Image.new("L", (S, S), 0), smask))
     shield = Image.alpha_composite(shield, inner)
@@ -221,8 +274,8 @@ def make_monochrome(size):
     遮罩里根本分辨不出来，于是横杠和虚线全部消失，图标退化成一个
     实心盾牌 + 一个色块。
 
-    正确做法：自己构造 alpha 遮罩，盾=不透明，横杠与虚线=**挖空**
-    （alpha=0）。系统着色后就是「实心盾 + 镂空横杠 + 镂空虚线」，
+    正确做法：自己构造 alpha 遮罩，盾=不透明，字母与闪电 =**挖空**
+    （alpha=0）。系统着色后就是「实心盾 + 镂空 B + 镂空闪电」，
     跟彩色版读起来是同一枚图标。
 
     返回 RGBA（黑色 + 上述 alpha）。黑色本身无意义，交给系统着色。
@@ -236,12 +289,20 @@ def make_monochrome(size):
     # 遮罩起点= 盾体不透明
     mask = shield_mask(S, cx, cy, w, h)
 
-    # 在透明副本上画内部元素（白），再用「盾体 - 内部元素」当遮罩，
-    # 这样横杠与虚线自然被挖空，形状与彩色版逐像素对得上。
+    # ⚠️ monochrome 里的 ink/carve 与彩色版**语义不同**，别照抄：
+    #   彩色版：ink=蓝（画字母）、carve=白（填碗）
+    #   mono  ：ink=白（挖掉字母与闪电）、carve=黑（保留碗的实心环）
+    #
+    # 最终效果 = 实心盾 − 字母 − 闪电 + 碗的环。
+    # 碗不能整块挖空：字母的内腔本来就是「露出盾的白」，
+    # 在剪影里如果连内腔也一起挖，B 就成了两条分离的横线加一个竖干，
+    # 完全读不出是B。所以碗的内腔用 carve=0 填回，保留一个实心块。
     inner = Image.new("L", (S, S), 0)
     draw_inner(
         ImageDraw.Draw(inner), cx, cy, w, h, S,
-        bar_fill=255, dash_fill=lambda a: 255,
+        bar_fill=255,
+        ink=255,          # 字母 + 闪电 = 要挖空的部分
+        carve=0,          #碗内腔 = 保留
     )
     inner = Image.composite(inner, Image.new("L", (S, S), 0), mask)
 
@@ -280,11 +341,11 @@ def main():
     anydpi = RES / "mipmap-anydpi-v26"
     anydpi.mkdir(parents=True, exist_ok=True)
     xml = '''<?xml version="1.0" encoding="utf-8"?>
-    <!-- 自适应图标：前景是盾牌+拒止横杠，底色纯品牌蓝。
+    <!-- 自适应图标：前景是「白盾 + 蓝B 骨架 + 橙闪电」，底色深蓝。
          内容必须落在中心 66% 安全区内，否则会被各家 Launcher
          的圆形/水滴形遮罩裁掉。
-         monochrome 是单独画的剪影（横杠与虚线挖空成透明），
-         Android 13+ 主题图标只取alpha 通道着色，直接复用彩色前景会退化成实心盾。 -->
+         monochrome 是单独画的剪影（B 与闪电镂空成透明、碗内腔保留实心），
+         Android 13+ 主题图标只取 alpha 通道着色，直接复用彩色前景会退化成实心盾。 -->
     <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
         <background android:drawable="@color/ic_launcher_background" />
         <foreground android:drawable="@mipmap/ic_launcher_foreground" />
@@ -301,7 +362,10 @@ def main():
     (vals / "ic_launcher_background.xml").write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<resources>\n'
-        '    <color name="ic_launcher_background">#1E4EBD</color>\n'
+        # 底色取 BRAND_DARK 附近（#102A6E）。自适应图标的背景层是**纯色铺满**，
+        # 各家 Launcher 会在它上面再套圆形/水滴遮罩，所以底色必须与前景
+        # 有足够对比 —— 上一版用 #1E4EBD偏亮，白盾压在上面的边界不够利落。
+        '    <color name="ic_launcher_background">#102A6E</color>\n'
         '</resources>\n',
         encoding="utf-8"
     )

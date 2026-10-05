@@ -2,6 +2,7 @@ package com.bt.waf.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,29 +12,52 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.bt.waf.R
+import com.bt.waf.data.update.AppUpdater
+import com.bt.waf.ui.components.ChipTone
+import com.bt.waf.ui.components.ErrorBanner
+import com.bt.waf.ui.components.HintText
+import com.bt.waf.ui.components.LoadingBar
+import com.bt.waf.ui.components.PrimaryButton
 import com.bt.waf.ui.components.SectionHeader
+import com.bt.waf.ui.components.SmallButton
+import com.bt.waf.ui.components.StatusChip
 import com.bt.waf.ui.components.WafCard
 import com.bt.waf.ui.theme.Space
+import com.bt.waf.viewmodel.UpdateViewModel
 
 /** 作者信息集中在这里，改版时只动这一处。 */
 private const val AUTHOR_NAME = "雨落秋垣"
 private const val AUTHOR_SITE = "https://uniomo.com"
-private const val REPO_SITE = "https://cnb.cool"
+
+/**
+ * 源码仓库地址。
+ *
+ * 指向具体仓库而不是 cnb.cool 首页：在线更新的版本文件也从这个仓库取，
+ * 两处必须是同一个地址，否则「关于」页点进去和「检查更新」查的不是一回事。
+ */
+private const val REPO_SITE = "https://cnb.cool/unicom/BTWAF"
 
 /**
  * 「关于作者」页。
@@ -46,6 +70,12 @@ private const val REPO_SITE = "https://cnb.cool"
 @Composable
 fun AboutScreen() {
     val ctx = LocalContext.current
+    val uv: UpdateViewModel = viewModel()
+
+    // ViewModel 需要 Context 才能拉起安装器与落地下载文件。
+    // 用 SideEffect 而不是直接赋值：直接赋值会在每次重组时都执行，
+    // 属于「在组合过程中写状态」的副作用写法，容易和后续状态更新打架。
+    LaunchedEffect(Unit) { uv.appContext = ctx }
 
     fun openUrl(url: String) {
         runCatching {
@@ -84,11 +114,13 @@ fun AboutScreen() {
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                Icons.Filled.Shield,
+            // 与登录页同一张 launcher 前景图，不在这里另画一个盾牌，
+            // 否则改了桌面图标这两处又会各走各的。
+            Image(
+                painter = painterResource(R.mipmap.ic_launcher_foreground),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(84.dp),
+                contentScale = ContentScale.Fit
             )
         }
 
@@ -148,20 +180,166 @@ fun AboutScreen() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(Space.md))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Filled.Info,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.size(16.dp)
+            //版本号不在这里显示：下方「在线更新」区第一行就是当前版本，
+            //两处都写会让人怀疑是不是有两套版本信息（而且改版本时
+            // 必然出现只改一处的情况）。
+        }
+
+        Spacer(Modifier.height(Space.lg))
+
+        // ── 在线更新 ──
+        // 放在「关于」页而不是单独一个 Tab：更新是低频操作，不值得占主导航位；
+        // 而「关于」页本来就是用户查版本 / 找仓库的地方，语义吻合。
+        SectionHeader("在线更新")
+        WafCard {
+            // 当前版本始终展示（从包信息读，不写死）。
+            // 写死过一次「版本 1.0.0」，结果每次升版本都得记得改这里，
+            // 漏改时用户看到「已是最新 1.1.0」却显示着 1.0.0，
+            // 反而会以为更新没生效。
+            InfoRow(
+                icon = Icons.Filled.SystemUpdate,
+                label = "当前版本",
+                value = "${AppUpdater.currentVersionName} (${AppUpdater.currentVersionCode})"
+            )
+            Spacer(Modifier.height(Space.xs))
+            LoadingBar(uv.state is UpdateViewModel.State.Checking)
+
+            when (val s = uv.state) {
+                is UpdateViewModel.State.Idle -> Text(
+                    "点击下方按钮查询是否有新版本。查询只下载一个几百字节的版本信息文件，" +
+                        "不会下载安装包。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.width(Space.sm))
-                Text(
-                    "版本 1.0.0",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.outline
+
+                is UpdateViewModel.State.Checking -> Text(
+                    "正在查询…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                is UpdateViewModel.State.UpToDate -> Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(Space.sm))
+                    Text(
+                        "已是最新版本（${s.current}）",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                is UpdateViewModel.State.Available -> Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        StatusChip("有新版本", ChipTone.INFO)
+                        Spacer(Modifier.width(Space.sm))
+                        Text(
+                            "${s.versionName} ← ${AppUpdater.currentVersionName}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Spacer(Modifier.height(Space.sm))
+                    Text(
+                        buildString {
+                            append("安装包 ${s.sizeText}")
+                            if (s.publishedAt.isNotBlank()) append(" · ${s.publishedAt}")
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(Space.sm))
+                    HintText(
+                        if (s.sha256.isNotBlank()) "下载后会校验完整性，校验不通过不会安装。"
+                        else "远端未提供校验值，请确认来源可信后再更新。"
+                    )
+                    Spacer(Modifier.height(Space.md))
+                    // ⚠️ 纵向排列，不要放进 Row：
+                    // PrimaryButton 内部是 modifier.fillMaxWidth()，
+                    // 塞进 Row 会把旁边的「取消」挤出屏幕外（而且不会
+                    // 报错，只是看不见，属于最难发现的那类布局问题）。
+                    PrimaryButton(text = "立即更新", onClick = { uv.download { } })
+                    Spacer(Modifier.height(Space.xs))
+                    SmallButton(
+                        text = "暂不更新",
+                        tone = ChipTone.NEUTRAL,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { uv.cancel() }
+                }
+
+                is UpdateViewModel.State.Downloading -> Column {
+                    val total = s.total
+                    val pct = if (total > 0) ((s.read * 100) / total).toInt().coerceIn(0, 100) else null
+                    Text(
+                        if (pct != null) "正在下载 $pct%　（${fmtMB(s.read)} / ${fmtMB(total)}）"
+                        else "正在下载　（已下载 ${fmtMB(s.read)}）",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(Space.sm))
+                    // 百分比已知才用确定型进度条：总量未知时用 0f 会一直显示空条，
+                    // 用户会以为卡死了。
+                    if (pct != null) {
+                        LinearProgressIndicator(
+                            progress = { pct / 100f },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    Spacer(Modifier.height(Space.sm))
+                    Text(
+                        "支持断点续传，中断后再次点击会接着下载。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(Space.sm))
+                    SmallButton("取消下载", tone = ChipTone.DANGER) { uv.cancel() }
+                }
+
+                is UpdateViewModel.State.Ready -> Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(Space.sm))
+                        Text(
+                            "下载完成，校验通过",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Spacer(Modifier.height(Space.md))
+                    PrimaryButton(text = "安装更新", onClick = { uv.install() }, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(Space.xs))
+                    Text(
+                        "系统会弹出安装确认。安装时会短暂退出应用，属正常现象。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                is UpdateViewModel.State.Failed -> Column {
+                    ErrorBanner(s.reason)
+                    Spacer(Modifier.height(Space.sm))
+                    SmallButton("重试", tone = ChipTone.NEUTRAL) { uv.check() }
+                }
             }
+
+            Spacer(Modifier.height(Space.md))
+            SmallButton(
+                text = "重新检查",
+                tone = ChipTone.NEUTRAL,
+                enabled = uv.state !is UpdateViewModel.State.Checking
+            ) { uv.check() }
         }
 
         Spacer(Modifier.height(Space.lg))
@@ -267,3 +445,6 @@ private fun RowIcon(icon: ImageVector) {
 private fun Toast_(ctx: android.content.Context, msg: String) {
     android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
 }
+
+/** 字节数转 MB 文本，下载进度用。 */
+private fun fmtMB(bytes: Long): String = "%.1f MB".format(bytes / 1024.0 / 1024.0)

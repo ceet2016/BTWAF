@@ -9,7 +9,12 @@ ADB="$HOME/.workbuddy/binaries/android/sdk/platform-tools/adb.exe"
 cd "$(dirname "$0")/.."
 OUT="shots"
 mkdir -p "$OUT"
-PW='qwer123456!'
+
+# ⚠️ 密码从环境变量读，**不要在这里写明文**。
+# 这份脚本是要进git 的，任何写死的口令都会跟着仓库一起公开。
+# 用法：BTWAF_PW='你的密码' bash tools/verify_cookie.sh
+: "${BTWAF_PW:?请先设置环境变量 BTWAF_PW 再运行本脚本}"
+PW="$BTWAF_PW"
 
 "$ADB" shell am force-stop com.bt.waf
 sleep 1
@@ -46,8 +51,11 @@ sleep 9
 "$ADB" exec-out screencap -p > "$OUT/_after_login.png"
 
 echo "=== 登录相关请求 ==="
+# 只按 action 名过滤，**不要 grep 具体主机或入口路径** ——
+# 日志里那些东西正是这个脚本要证明「确实带上Cookie」的证据，
+# 而把它们写进 grep 模式就等于把真实部署信息抄进了要入库的文件。
 "$ADB" logcat -d 2>/dev/null | grep -E "okhttp" \
-  | grep -E "d75e7a5401|user/login" | head -8
+  | grep -E "user/login" | head -8
 echo
 echo "=== Cookie 请求头（/api 请求里有没有 f49ac9b4...）==="
 "$ADB" logcat -d 2>/dev/null | grep -E "okhttp" \

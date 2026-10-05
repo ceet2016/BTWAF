@@ -1,5 +1,6 @@
 package com.bt.waf.data.net
 
+import com.bt.waf.BuildConfig
 import com.bt.waf.data.store.AuthStore
 import com.google.gson.GsonBuilder
 import okhttp3.Cookie
@@ -105,15 +106,23 @@ class WafClient(private val authStore: AuthStore) {
         val builder = OkHttpClient.Builder()
             .cookieJar(cookieJar)
             .addInterceptor(AuthInterceptor { authStore.token })
-            .addInterceptor(
+        // ⚠️ 日志拦截器只在 debug 包里装。
+        //
+        // 就算降到 BASIC，OkHttp 打的仍然是**完整请求行**，里面含主机名+端口：
+        //   --> POST https://1.2.3.4:8379/api/user/login
+        // release 包用户只要抓一次 logcat（客服排障、系统日志上报、
+        // 第三方工具自动收集）就等于把部署地址交出去了，而 WAF 实例
+        // 的 IP + 端口本身就是敏感信息。release 里完全不要装它。
+        //
+        // 排查线上问题时也不要临时改成 HEADERS —— 那个级别会把 Cookie 与
+        // Authorization 完整打进日志，等于把会话凭据写进设备日志。
+        if (BuildConfig.DEBUG) {
+            builder.addInterceptor(
                 HttpLoggingInterceptor().apply {
-                    // 保持 BASIC：HEADERS 级别会把 Cookie 与 Authorization
-                    // 完整打进 logcat，既泄漏会话凭据，日志量也大得没法看。
-                    // 排查「SID Cookie 有没有带上」时临时改成 HEADERS，
-                    // 抓完记得改回来。
                     level = HttpLoggingInterceptor.Level.BASIC
                 }
             )
+        }
         if (authStore.trustSelfSigned) builder.trustAllCertificates()
         return builder.build()
     }

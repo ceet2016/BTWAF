@@ -1,9 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    customize/export 落地的文件位于应用缓存目录（cacheDir/waf_transfer），
-    属于内部存储，没有 FileProvider 就无法把导出结果分享给用户。
-    这里只暴露 cache 下的 waf_transfer 子目录，不开放整个缓存。
+    本文件声明 FileProvider 可以对外分享的目录，**范围越紧越好**：
+    开放的目录相当于任何拿到 content:// URI 的应用都能读，
+    开放整个 files/ 就等于把自己的内部存储摆在门口。
+
+    当前两处用途：
+      1. cache/waf_transfer —— customize/export 的规则导出结果，
+         用户要把它保存到别的应用/发给别人，没有 FileProvider 无法分享。
+      2. files/            —— 在线更新下载好的 APK 暂存点。
+         ⚠️ 系统安装器只认 content:// URI，直接给 file:// 在 targetSdk 34
+         下会抛 FileUriExposedException，所以 APK 也必须走这里。
 -->
 <paths>
     <cache-path name="waf_transfer" path="waf_transfer/" />
+    <!--
+        ⚠️ 只开放根目录下这一个文件，而不是整个 files/。
+        写成 <files-path name="x" path="."/> 等于把自己全部内部存储
+        开放给任何拿到 content:// URI 的一方；而 APK 是唯一需要跨进程
+        分享的文件，精确到文件名就足够。
+    -->
+    <files-path name="update_apk" path="btwaf-update.apk" />
 </paths>

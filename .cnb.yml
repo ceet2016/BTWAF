@@ -1,0 +1,155 @@
+# CNB 流水线：推送 main 后自动构建 APK 并发布为可下载附件。
+#
+# 四点设计说明，都是实测踩出来的：
+#
+# 1. **产物上传为 commit 附件，App 靠它匿名查版本**
+#    CNB 的 api.cnb.cool 接口（/-/git/tags、/-/releases、/-/commit-assets）
+#    **匿名一律 401**，而 token 绝不能硬编码进 APK。实测唯一匿名可用的路径是
+#    web 端：https://cnb.cool/<slug>/-/commit-assets/download/<ref>/<file>
+#    它接受分支名作 ref，302跳到带签名的 asset.cnb.cool。
+#    ⚠️ 注意别用 /-/raw/ 那个路径：文件不存在时它返回 **HTTP 200 + 一张
+#    HTML 错误页**，只看状态码会误判成成功。App 端因此必须校验内容格式。
+#
+# 2. **version.json 由构建脚本从 build.gradle 反查生成**
+#    不手写版本号。手写必然出现「build.gradle 升到 1.2.0、version.json 还写
+#    1.1.0」，App 于是永远提示已是最新，用户看着新版本却装不上。
+#    单一来源就是 app/build.gradle 的 versionCode / versionName。
+#
+# 3. **APK 用固定文件名 btwaf-latest.apk**
+#    下载 URL 必须与 version.json 的 apkName 逐字一致，而 version.json 在上一个
+#    stage 生成、这个 stage 消费，任何命名偏差都会让 App 404 —— 且 CI 全程绿灯，
+#    这种「构建成功但功能不可用」最难查。固定名把这个耦合彻底消除。
+#
+# 4. **用 release 签名而非 debug 签名**
+#    在线更新时系统会比对签名，不一致直接 INSTALL_FAILED_UPDATE_INCOMPATIBLE。
+#    debug 密钥每台机器/每个容器都不同，所以 CI 必须用 release 签名。
+
+main:
+  push:
+    - docker:
+        image: docker.cnb.cool/jacknic/docker/android-ci-builder:jdk17
+        volumes:
+          # gradle 缓存走 cow（copy-on-write）：命中时零拷贝，
+          # 未命中也不会把脏数据写回缓存层。
+          - /root/.gradle:cow
+          - /opt/android-sdk:cow
+      envs:
+        # 可选：正式签名密钥。走仓库内置 keystore/release.jks 时无需配置。
+        # 想换成自己的密钥，在仓库「密钥库」里配好以下四项即可，
+        # app/build.gradle 会自动优先使用它们。
+        CI_KEYSTORE_BASE64: $CI_KEYSTORE_BASE64
+        CI_KEYSTORE_FILE: $CI_KEYSTORE_FILE
+        CI_KEYSTORE_PASSWORD: $CI_KEYSTORE_PASSWORD
+        CI_KEY_ALIAS: $CI_KEY_ALIAS
+        CI_KEY_PASSWORD: $CI_KEY_PASSWORD
+      stages:
+        - name: build-release-apk
+          script: |
+            set -e
+            chmod +x gradlew
+
+            # 用 sed 抓而不是加 Gradle 任务：省掉一次 30s+ 的配置阶段。
+            #
+            # ⚠️ 不要用 `grep -oP`：PCRE 是 GNU grep 的扩展，busybox/精简镜像上
+            #  没有 -P 会直接报 "grep: unrecognized option"，构建在第一步就挂。
+            # 这里的 `^[[:space:]]*` 锚定行首是必须的 —— 上方注释里就写着
+            #  "versionCode 与 versionName 单一来源"，不锚行首会先匹配到注释。
+            VC=$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*\([0-9]\{1,\}\).*/\1/p' app/build.gradle | head -1)
+            VN=$(sed -n 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' app/build.gradle | head -1)
+            echo "解析到版本: versionCode=$VC versionName=$VN"
+            if [ -z "$VC" ] || [ -z "$VN" ]; then
+              echo "!! 没能从 app/build.gradle 解析出版本号，终止构建"
+              exit 1
+            fi
+
+            echo "== 构建 release APK =="
+            # 优先用镜像自带的 gradle（本项目 AGP 8.5.2 要求 Gradle ≥ 8.7）。
+            # 兜底才用 wrapper：wrapper 的 distributionUrl 指向
+            # services.gradle.org，国内容器里经常连不上，会在这一步超时。
+            if command -v gradle >/dev/null 2>&1; then
+              GRADLE_BIN="gradle"
+            else
+              GRADLE_BIN="./gradlew"
+            fi
+            echo "使用构建器: $GRADLE_BIN"
+            $GRADLE_BIN assembleRelease --no-daemon --stacktrace
+
+            APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+            echo "产物: $APK"
+            cp "$APK" btwaf-latest.apk
+
+            SIZE=$(stat -c%s btwaf-latest.apk)
+            SHA=$(sha256sum btwaf-latest.apk | cut -d' ' -f1)
+
+            cat > version.json <<JSON
+            {
+              "versionCode": ${VC},
+              "versionName": "${VN}",
+              "apkName": "btwaf-latest.apk",
+              "size": ${SIZE},
+              "sha256": "${SHA}",
+              "publishedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            }
+            JSON
+            echo "== version.json =="
+            cat version.json
+
+        - name: upload-assets
+          image: cnbcool/attachments:latest
+          settings:
+            # ⚠️ 这里**不能**写 ${VN}/${VC}：下一个 job 是独立容器，
+            # 拿不到上一个 job 的 shell 变量。附件名又是固定的，
+            # 直接写死即可。
+            #
+            # 上传为 commit 附件（不传 tag）——这是 App 匿名可下载的那一类。
+            attachments:
+              - version.json
+              - btwaf-latest.apk
+
+# 打 tag 时同样构建一份，挂到 release 上做长期存档。
+$:
+  tag_push:
+    - docker:
+        image: docker.cnb.cool/jacknic/docker/android-ci-builder:jdk17
+        volumes:
+          - /root/.gradle:cow
+          - /opt/android-sdk:cow
+      envs:
+        CI_KEYSTORE_BASE64: $CI_KEYSTORE_BASE64
+        CI_KEYSTORE_FILE: $CI_KEYSTORE_FILE
+        CI_KEYSTORE_PASSWORD: $CI_KEYSTORE_PASSWORD
+        CI_KEY_ALIAS: $CI_KEY_ALIAS
+        CI_KEY_PASSWORD: $CI_KEY_PASSWORD
+      stages:
+        - name: build
+          script: |
+            set -e
+            chmod +x gradlew
+            VC=$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*\([0-9]\{1,\}\).*/\1/p' app/build.gradle | head -1)
+            VN=$(sed -n 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' app/build.gradle | head -1)
+            if command -v gradle >/dev/null 2>&1; then
+              GRADLE_BIN="gradle"
+            else
+              GRADLE_BIN="./gradlew"
+            fi
+            $GRADLE_BIN assembleRelease --no-daemon --stacktrace
+            cp "$(ls app/build/outputs/apk/release/*.apk | head -1)" btwaf-latest.apk
+            SIZE=$(stat -c%s btwaf-latest.apk)
+            SHA=$(sha256sum btwaf-latest.apk | cut -d' ' -f1)
+            cat > version.json <<JSON
+            {
+              "versionCode": ${VC},
+              "versionName": "${VN}",
+              "apkName": "btwaf-latest.apk",
+              "size": ${SIZE},
+              "sha256": "${SHA}",
+              "publishedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            }
+            JSON
+        - name: upload-release-assets
+          image: cnbcool/attachments:latest
+          settings:
+            # tag_push 事件下 tag 取环境变量 $CNB_BRANCH，无需显式指定。
+            attachments:
+              - version.json
+              - btwaf-latest.apk

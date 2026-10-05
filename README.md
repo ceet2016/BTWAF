@@ -3,6 +3,9 @@
 堡塔云WAF（[aaPanel/aawaf](https://github.com/aaPanel/aawaf)）的原生 Android 客户端，使用 Kotlin + Jetpack Compose 编写，
 通过完整会话接口（后台 Cookie + JWT）而非有限的开放 API 接入，功能覆盖后台绝大部分模块。
 
+- 源码仓库：<https://cnb.cool/unicom/BTWAF>
+- 作者：雨落秋垣 · <https://uniomo.com>
+
 ## 一、技术栈
 
 | 项 | 版本 / 选型 |
@@ -48,6 +51,7 @@
 | 通知 | `notification/list`、`notification/update`、`notification/clear`（邮箱 / 钉钉 / 飞书 / 企业微信） |
 | 系统设置 | `config/get_config` 及 `set_title` / `set_domain` / `set_ip` / `set_language` / `set_timeout` / `set_port` / `set_admin_path` / `set_basic_auth` / `set_open_api` / `set_pwd` |
 | 账号与运维 | `user/profile`、`user/update_profile`、`user/restart`、`user/update` |
+| 在线更新 | 无（读仓库 commit 附件 `version.json`，比 `versionCode` 后按需下载 APK） |
 
 接口全量清单（315 个，由源码结构体方法自动提取）见 [`docs/API.md`](docs/API.md)。
 
@@ -66,13 +70,60 @@ export ANDROID_HOME=~/.workbuddy/binaries/android/sdk
 - 调试包 `app/build/outputs/apk/debug/app-debug.apk`
 - 正式包 `app/build/outputs/apk/release/app-release.apk`
 
-签名（可选）：复制 `keystore.properties.example` 为 `keystore.properties` 并填入自有证书信息；不配置时 release 会自动退回 debug 签名。
+### 签名
+
+签名配置三级回退（优先级从高到低）：
+
+| 优先级 | 来源 | 用途 |
+|---|---|---|
+| 1 | `keystore.properties`（本地文件，不入库） | 开发者自有证书 |
+| 2 | 环境变量 `CI_KEYSTORE_*` | CNB 密钥库注入 |
+| 3 | 仓库内 `keystore/release.jks` | **默认**：自签发布密钥 |
+
+**为什么在线更新必须用同一个密钥**：Android 安装时会比对新旧包的签名，
+不一致直接报 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`，用户装不上升级包。
+debug 密钥每台机器、每个构建容器都不同，所以 CI 与本地产物都统一用
+release 签名，两者可以互相覆盖安装。
+
+**关于仓库内置密钥**：本项目完全开源、安装包任何人可自行编译，签名密钥
+在这里的作用不是"证明身份"，而是"证明这是同一个 App 的新版本"。
+换成私有密钥的收益有限（谁都能自己编译），风险却很大
+（密钥泄露或丢失 = 全量用户永久无法升级）。想换成自己的密钥，
+在 CNB 仓库设置里配好 `CI_KEYSTORE_*` 即可，本地放一份
+`keystore.properties`。
+
+### 自动化构建与在线更新
+
+推送 `main` 后 [.cnb.yml](.cnb.yml) 自动构建 release APK，并把
+**版本文件**与**安装包**一起上传为 commit 附件：
+
+```
+https://cnb.cool/unicom/BTWAF/-/commit-assets/download/main/version.json
+https://cnb.cool/unicom/BTWAF/-/commit-assets/download/main/btwaf-latest.apk
+```
+
+`version.json` 形如：
+
+```json
+{ "versionCode": 2, "versionName": "1.1.0", "apkName": "btwaf-latest.apk",
+  "size": 12345678, "sha256": "…", "publishedAt": "2026-10-05T12:00:44Z" }
+```
+
+**版本号只有一处来源**：`app/build.gradle` 的 `versionCode` / `versionName`。
+CI 用 grep 反查它生成 `version.json`，不要在手写文件里重复一遍 ——
+两边一旦不一致，App 会永远提示"已是最新"，而 CI 全程绿灯。
+
+App 端「系统 → 关于作者」页提供「在线更新」：**先查版本号（几百字节），
+确认 `versionCode` 确实更大才提示更新，APK 下载由用户点击触发**，
+并支持断点续传与 SHA256 校验。流量消耗与实际更新次数成正比，
+而不是与打开 App 的次数成正比。
 
 用 Android Studio 直接打开亦可，需在 `local.properties` 里写明 `sdk.dir`。
 
 ## 五、使用说明
 
-1. 首次打开在登录页填入「服务器地址」，形如 `https://81.70.19.168:8379/d75e7a5401`（**含入口路径**）。
+1. 首次打开在登录页填入「服务器地址」，形如 `https://<你的IP>:<端口>/<入口路径>`（**含入口路径**）。
+   地址一律由用户自行填写，App 不预填任何示例地址。
 2. 若后台使用自签名证书，勾选「信任自签名证书」。
 3. 登录成功后会话保存在本地，下次自动进入；退出登录会清除 token。
 

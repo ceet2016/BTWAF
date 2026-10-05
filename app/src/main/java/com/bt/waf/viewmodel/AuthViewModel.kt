@@ -10,8 +10,19 @@ import kotlinx.coroutines.launch
 
 class AuthViewModel(private val repo: WafRepository) : ViewModel() {
 
-    /** 该实例的网页版地址（含后台入口路径），便于首次使用。 */
-    var webUrl by mutableStateOf("https://81.70.19.168:8379/d75e7a5401")
+    /**
+     * 该实例的网页版地址（含后台入口路径）。
+     *
+     * ⚠️ 默认值必须是**空串**，绝不能预填任何真实地址。
+     * 开发期这里曾硬编码过某个演示实例的 IP + 入口路径，结果：
+     *  1. 任何拿到这份源码或装上这个 APK 的人，一打开登录页就看到别人的
+     *     内网 IP 和后台入口路径 —— 入口路径加端口实质上等于半个凭据，
+     *     配合弱口令就能直接登进后台；
+     *  2. 每张登录页截图都会带着这条信息，截图外发即泄露。
+     *
+     * 所以：默认值空，只有用户自己填过（或本机存过）才回填。
+     */
+    var webUrl by mutableStateOf("")
     var username by mutableStateOf("")
     var password by mutableStateOf("")
     var trust by mutableStateOf(true)

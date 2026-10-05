@@ -3,13 +3,75 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// 读取本地签名配置（keystore.properties 存在时才启用正式签名）
+/*
+ * 签名配置的三级回退（顺序即优先级）：
+ *
+ *  1. `keystore.properties`—— 本地/CI 注入的正式密钥（不入库）
+ *  2. 环境变量 CI_KEYSTORE_BASE64 —— CNB 流水线从密钥库注入的密钥
+ *  3. 仓库内 `keystore/release.jks` —— **公开的、自签的**发布密钥
+ *
+ * ⚠️ 第1 级必须**同时校验密钥文件真实存在**，不能只看配置项存在。
+ *踩过的坑：换了密钥文件名后，本机`keystore.properties` 仍指向旧的
+ * app.jks，Gradle 在 `validateSigningRelease` 阶段直接失败：
+ *   Keystore file '...app.jks' not found for signing config 'release'
+ * 而此时它**不会**回退到第 3 级 —— 配置项存在就够了，Gradle 认为
+ * 你明确指定了密钥，等到校验阶段才发现文件没了。
+ * 症状是「本机能构建、CI 也能构建，唯独我本地挂了」，
+ * 而报错信息完全没提回退逻辑，很难联想到要改 properties。
+ *
+ * 为什么需要签名统一：在线更新要求所有 APK 用**同一个密钥**签名，
+ * 否则系统报 INSTALL_FAILED_UPDATE_INCOMPATIBLE，用户装不上升级包。
+ * 开发机用debug 密钥、CI 用 release 密钥产出的两个包互相装不上。
+ *
+ * 为什么敢用第 3 级（公开密钥）：这个应用是**完全开源**的，安装包
+ * 任何人可自行编译。签名密钥在这里的作用不是"证明身份"，
+ * 而是"证明这是同一个 App 的新版本"，防止别人伪造包覆盖安装。
+ * 公开密钥的风险是"能自签名的人也能造出合法包"，而开源项目本来
+ * 就没法阻止这件事。换成私有密钥反而更危险：密钥一旦泄露或丢失，
+ * 全量用户都无法升级，且没有任何补救余地。
+ */
 def keystoreProps = new Properties()
 def keystoreFile = rootProject.file("keystore.properties")
 if (keystoreFile.exists()) {
     keystoreFile.withInputStream { keystoreProps.load(it) }
 }
-def hasSigning = keystoreProps.getProperty("KEYSTORE_FILE") != null
+
+// 环境变量注入（CNB 密钥库 → envs.ci → 环境变量）
+def envKeystore = System.getenv("CI_KEYSTORE_BASE64")
+def envFile = System.getenv("CI_KEYSTORE_FILE")
+def envPass = System.getenv("CI_KEYSTORE_PASSWORD")
+def envAlias = System.getenv("CI_KEY_ALIAS")
+def envKeyPass = System.getenv("CI_KEY_PASSWORD")
+def hasEnvSigning = envKeystore && envFile && envPass && envAlias && envKeyPass
+
+// CI 里把 base64 密钥还原成文件（只还原一次，之后复用）
+def envKeystorePath = null
+if (hasEnvSigning) {
+    def tmp = new File("${rootProject.buildDir}/ci-keystore.jks")
+    tmp.parentFile.mkdirs()
+    if (!tmp.exists()) {
+        tmp.bytes = "$envKeystore".replaceAll("\\s", "").decodeBase64()
+    }
+    envKeystorePath = tmp
+}
+
+// 第 1 级：配置项存在 **且** 密钥文件真实存在
+def localKeystore = null
+if (keystoreProps.getProperty("KEYSTORE_FILE")) {
+    def f = rootProject.file(keystoreProps.getProperty("KEYSTORE_FILE"))
+    if (f.exists()) {
+        localKeystore = f
+    } else {
+        // 明确告知而不是让Gradle 在后面报一个「文件找不到」——
+        // 后者看不出「哦原来是回退链断了」。
+        logger.lifecycle(
+            "[BTWAF] keystore.properties 指向的密钥不存在（${f}），" +
+            "已回退到仓库内置密钥 keystore/release.jks。" +
+            "如需使用自有证书，请修正 keystore.properties 的 KEYSTORE_FILE。")
+    }
+}
+
+def hasSigning = localKeystore != null || hasEnvSigning
 
 android {
     namespace = "com.bt.waf"
@@ -19,17 +81,30 @@ android {
         applicationId = "com.bt.waf"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        // versionCode 与 versionName 单一来源：CI 会读这两个值生成 version.json，
+        // App 的在线更新就是比对远端 versionCode。**改版本号只改这里一处。**
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     signingConfigs {
         release {
-            if (hasSigning) {
-                storeFile = rootProject.file(keystoreProps.getProperty("KEYSTORE_FILE"))
+            if (localKeystore != null) {
+                storeFile = localKeystore
                 storePassword = keystoreProps.getProperty("KEYSTORE_PASSWORD")
                 keyAlias = keystoreProps.getProperty("KEY_ALIAS")
                 keyPassword = keystoreProps.getProperty("KEY_PASSWORD")
+            } else if (hasEnvSigning) {
+                storeFile = envKeystorePath
+                storePassword = envPass
+                keyAlias = envAlias
+                keyPassword = envKeyPass
+            } else {
+                // 仓库内置的自签发布密钥：签名一致，在线更新才能装得上。
+                storeFile = rootProject.file("keystore/release.jks")
+                storePassword = "btwaf2026"
+                keyAlias = "btwaf"
+                keyPassword = "btwaf2026"
             }
         }
     }
@@ -37,11 +112,22 @@ android {
     buildTypes {
         release {
             minifyEnabled = false
-            signingConfig = hasSigning ? signingConfigs.release : signingConfigs.debug
+            signingConfig = signingConfigs.release
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            // ⚠️ debug 也用**同一把 release 密钥**，不是默认的 debug 密钥。
+            //
+            // 理由很实际：开发者平时装的是 debug 包，CI 产出的是 release 包。
+            // 两者签名不同的话，用 debug 包就**永远装不上** CI 产出的更新包
+            // （INSTALL_FAILED_UPDATE_INCOMPATIBLE），而本地一切正常 ——
+            // 也就是说「在线更新这个功能只在真机装 release 包时才能验证」。
+            // 统一签名后，本地 debug 包与 CI release 包可以互相覆盖，
+            // 开发与验证路径一致。
+            signingConfig = signingConfigs.release
         }
     }
 
@@ -56,6 +142,9 @@ android {
 
     buildFeatures {
         compose = true
+        // BuildConfig.DEBUG：日志拦截器只在 debug 包里装，
+        // release 包不生成这个类也没关系，代码里只用到 DEBUG 这一个字段。
+        buildConfig = true
     }
 
     composeOptions {
