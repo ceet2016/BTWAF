@@ -200,3 +200,24 @@ echo "  截图目录: $OUT"
 echo "  成功张数: $(echo $VISITED | wc -w)"
 echo "  失败张数: $SHOT_FAIL"
 echo "  重复张数: $DUP  (与上一张内容相同 = 点击没生效，这些页没验证到)"
+
+# 两项像素体检。
+#
+# **截图成功 ≠ 布局正确**。这两关拦的是肉眼一眼能看出来、
+# 但「截图 23 张全拿到」这种结论会漏掉的两类缺陷：
+#   - measure_top_gap：子页面顶部空一大块（内层 Scaffold 的 windowInsets 坑）
+#   - measure_cards：并排卡片左窄右宽
+#
+# ⚠️ 必须用系统 Python，workbuddy 内置的 3.13 没装 PIL。
+AUDIT_PY="C:/Users/Administrator/AppData/Local/Programs/Python/Python311/python.exe"
+TOOLS_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+echo ""
+echo "== 顶部空白检测 =="
+"$AUDIT_PY" "$TOOLS_DIR/measure_top_gap.py" "$OUT"/*.png | tail -10
+
+echo ""
+echo "== 卡片对称性检测 =="
+"$AUDIT_PY" "$TOOLS_DIR/measure_cards.py" "$OUT"/*.png 2>&1 \
+  | grep -E "存在不对称" | grep -v "0 个存在不对称" \
+  || echo "  全部 0 不对称"

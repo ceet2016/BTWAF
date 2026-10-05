@@ -145,9 +145,10 @@ fun CustomizeScreen() {
 
     LaunchedEffect(Unit) { vm.load() }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbar) },
+    // SubPageScaffold 而不是 Scaffold：内层 Scaffold 会再消费一遍
+    // windowInsets，顶部多出约 250px 空白（详见 SubPageScaffold 注释）。
+    SubPageScaffold(
+        snackbarHost = snackbar,
         floatingActionButton = {
             if (tab == CwTab.LIST) {
                 ExtendedFloatingActionButton(
@@ -161,7 +162,7 @@ fun CustomizeScreen() {
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             }
-        }
+        },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             WafTabRow(

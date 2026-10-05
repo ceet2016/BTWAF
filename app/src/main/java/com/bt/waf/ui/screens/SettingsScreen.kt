@@ -23,6 +23,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bt.waf.WafApplication
 import com.bt.waf.ui.components.*
 import com.bt.waf.ui.theme.Space
+import com.bt.waf.util.asBool
 import com.bt.waf.util.asList
 import com.bt.waf.util.asMap
 import com.bt.waf.util.asString
@@ -148,7 +149,7 @@ fun SettingsScreen() {
         ),
         SetItem(
             "Syslog 转发", "把 WAF 日志实时转发到外部 syslog 服务器",
-            if (vm.syslog["open"] == true || vm.syslog["open"].toString() == "1") {
+            if (vm.syslog["open"].asBool()) {
                 "已开启 → " + vm.syslog["host"].asString().ifBlank { "未设置地址" }
             } else {
                 "已关闭"
@@ -208,7 +209,7 @@ fun SettingsScreen() {
             }
 
             Panel.SYSLOG -> {
-                sysOpen = vm.syslog["open"] == true || vm.syslog["open"].toString() == "1"
+                sysOpen = vm.syslog["open"].asBool()
                 sysHost.value = vm.syslog["host"].asString()
                 sysPort.value = vm.syslog["port"].asString().ifBlank { "514" }
             }
@@ -216,16 +217,13 @@ fun SettingsScreen() {
             Panel.INTERCEPT -> interceptText.value = vm.config["interceptPage"].asString()
             Panel.TIME -> {
                 pwdExpire.value = vm.config["password_expire"].asString().ifBlank { "0" }
-                ntpOn = vm.config["ntptime"].toString() == "1" ||
-                    vm.config["ntptime"].toString() == "true"
-                warnOn = vm.config["warning_open"].toString() == "1" ||
-                    vm.config["warning_open"].toString() == "true"
+                ntpOn = vm.config["ntptime"].asBool()
+                warnOn = vm.config["warning_open"].asBool()
             }
 
             Panel.POLICY -> {
                 pwdExpire.value = vm.config["password_expire"].asString().ifBlank { "0" }
-                complexityOn = vm.config["password_complexity"].toString() == "1" ||
-                    vm.config["password_complexity"].toString() == "true"
+                complexityOn = vm.config["password_complexity"].asBool()
             }
 
             Panel.NONE -> Unit
@@ -253,10 +251,9 @@ fun SettingsScreen() {
         }
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbar) }
-    ) { padding ->
+    // SubPageScaffold 而不是 Scaffold：内层 Scaffold 会再消费一遍
+    // windowInsets，顶部多出约 250px 空白（详见 SubPageScaffold 注释）。
+    SubPageScaffold(snackbarHost = snackbar) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = cardPadding,
@@ -556,7 +553,7 @@ fun SettingsScreen() {
             // get_config 只给 two_step_auth 布尔，get_two_auth 才带用户名；
             // 后者失败时用前者兜底，至少开关状态是对的。
             val twoOpen = vm.twoStepAuth || vm.twoAuth["open"] == true ||
-                vm.twoAuth["open"].toString() == "1"
+                vm.twoAuth["open"].asBool()
             SettingsDialog(
                 title = "动态口令（TOTP）",
                 saving = saving,

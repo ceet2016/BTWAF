@@ -137,6 +137,14 @@ def analyze(path):
         if gaps and len(segs) >= 3 and max(gaps) < 10:
             continue
 
+        # 噪声带过滤 7：**间距远大于卡片宽度** → 一张整宽卡被内部元素切开。
+        # 并排栅格的 gap 是 Space.sm = 8dp ≈ 22px，卡片宽约 480px，
+        # 间距/宽度 ≈ 0.05。而「一张整宽卡里的标签 + 右侧箭头」被切开时：
+        # 实测防护规则页y≈784，卡宽 376px、间距 157px，间距/宽度 ≈ 0.42。
+        # 差一个数量级，0.3 是干净的分界。
+        if gaps and max(gaps) > min(ws) * 0.3:
+            continue
+
         wspread = max(ws) - min(ws)
         gspread = max(gaps) - min(gaps) if gaps else 0
         lm = segs[0][0]

@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bt.waf.data.repo.WafRepository
+import com.bt.waf.util.asBool
 import com.bt.waf.util.asMap
 import kotlinx.coroutines.launch
 
@@ -54,7 +55,7 @@ class SettingsViewModel(private val repo: WafRepository) : ViewModel() {
                 apiInfo = raw["apiinfo"].asMap()
                 syslog = raw["syslog"].asMap()
                 twoStepAuth = raw["two_step_auth"] == true ||
-                    raw["two_step_auth"].toString() == "1"
+                    raw["two_step_auth"].asBool()
                 port = raw["port"]?.toString() ?: ""
             } catch (e: Exception) {
                 error = e.message

@@ -98,10 +98,10 @@ fun NotificationsScreen() {
 
     val configuredCount = vm.channels.count { it["is_configured"] == true }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbar) }
-    ) { padding ->
+    // SubPageScaffold 而不是 Scaffold：内层 Scaffold 会再消费一遍
+    // windowInsets，顶部多出约 250px 空白（实测 273→566，本页最严重）。
+    // 详见 SubPageScaffold 注释。
+    SubPageScaffold(snackbarHost = snackbar) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = cardPadding,

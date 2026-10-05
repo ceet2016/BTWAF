@@ -22,6 +22,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bt.waf.WafApplication
 import com.bt.waf.ui.components.*
 import com.bt.waf.ui.theme.Space
+import com.bt.waf.util.asBool
 import com.bt.waf.util.asString
 import com.bt.waf.util.pickString
 import com.bt.waf.viewmodel.SitesViewModel
@@ -74,9 +75,10 @@ fun SitesScreen() {
         scope.launch { snackbar.showSnackbar(msg) }
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbar) },
+    // SubPageScaffold 而不是 Scaffold：内层 Scaffold 会再消费一遍
+    // windowInsets，顶部多出约 250px 空白（详见 SubPageScaffold 注释）。
+    SubPageScaffold(
+        snackbarHost = snackbar,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
@@ -86,7 +88,7 @@ fun SitesScreen() {
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
             ) { Icon(Icons.Filled.Add, contentDescription = "新增站点") }
-        }
+        },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             LoadingBar(vm.loading)
@@ -373,8 +375,12 @@ private fun SiteCard(
     onDelete: () -> Unit
 ) {
     val name = pickString(site, "site_name", "name", "domain", "id").ifBlank { "(未命名站点)" }
-    val status = site["status"].asString()
-    val on = status == "1" || status.equals("true", true)
+    // asBool() 而不是 status == "1"：
+    // 后端 get_site_list 返回的 status 是 **JSON 数字**（int 1/0），
+    // Gson 把它反序列化成 Double 1.0，原来的 "1" 比较永远为 false，
+    // 于是开关点「启用」→ 请求 200、后端状态真变了 → 列表重拉仍显示
+    // 「已停用」，用户怎么点都没用。asBool() 内部已处理 Double 归一化。
+    val on = site["status"].asBool()
     val tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
     val port = site["port"].asString()
     val sub = listOf(if (on) "防护中" else "已停用", if (port.isNotBlank()) "端口 $port" else "")

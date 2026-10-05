@@ -138,9 +138,10 @@ fun ManagedListScreen(config: ListConfig) {
         }
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbar) },
+    // SubPageScaffold 而不是 Scaffold：内层 Scaffold 会再消费一遍
+    // windowInsets，顶部多出约 250px 空白（详见 SubPageScaffold 注释）。
+    SubPageScaffold(
+        snackbarHost = snackbar,
         floatingActionButton = {
             if (config.createPath != null) {
                 ExtendedFloatingActionButton(
@@ -154,7 +155,7 @@ fun ManagedListScreen(config: ListConfig) {
                     text = { Text("新增") }
                 )
             }
-        }
+        },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             // ── 顶部工具条 ──

@@ -55,9 +55,10 @@ fun IpGroupScreen() {
         }
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbar) },
+    // SubPageScaffold 而不是 Scaffold：内层 Scaffold 会再消费一遍
+    // windowInsets，顶部多出约 250px 空白（详见 SubPageScaffold 注释）。
+    SubPageScaffold(
+        snackbarHost = snackbar,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
@@ -67,7 +68,7 @@ fun IpGroupScreen() {
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
             ) { Icon(Icons.Filled.Add, contentDescription = "新建分组") }
-        }
+        },
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),

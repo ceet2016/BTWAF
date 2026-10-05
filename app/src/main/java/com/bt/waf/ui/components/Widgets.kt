@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bt.waf.ui.theme.Space
+import com.bt.waf.util.asBool
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -70,6 +71,48 @@ val cardPadding: PaddingValues
 
 val rowCardPadding: PaddingValues
     @Composable get() = PaddingValues(horizontal = Space.md, vertical = Space.xs)
+
+/* ══════════════════ 子页面 Scaffold ══════════════════ */
+
+/**
+ * 子页面统一外壳，**只留底部内边距，顶部与左右一律交给 [contentPadding]**。
+ *
+ * 修的是「子页面顶部空出一大块」这个视觉缺陷。
+ *
+ * 成因是嵌套：MainScreen 已经有 Scaffold + TopAppBar + NavigationBar，
+ * 子页面在 NavHost 里**又套一层 Scaffold**。M3 的 Scaffold 默认带
+ * `contentWindowInsets = ScaffoldDefaults.contentWindowInsets`
+ * （会消费状态栏与导航栏 inset），于是内层又算一遍顶部 inset，
+ * 叠加 LazyColumn 自己的 `contentPadding = cardPadding`，
+ * 顶部就多出将近一整块空白。
+ *
+ * 实测量化（1080x2412）：
+ *  - 系统管理首页（无内层 Scaffold）顶部栏底 273→ 首张卡片 314，空白 41px ✅
+ *  - 通知设置（内层 Scaffold）  顶部栏底 273 → 首张卡片 566，空白 293px ❌
+ *
+ * 所以内层必须 `contentWindowInsets = WindowInsets(0, 0, 0, 0)`，
+ * 再把 padding 只取 bottom（留给 FAB / snackbar / 底部导航）。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SubPageScaffold(
+    modifier: Modifier = Modifier,
+    snackbarHost: SnackbarHostState? = null,
+    floatingActionButton: @Composable () -> Unit = {},
+    content: @Composable (PaddingValues) -> Unit
+) {
+    Scaffold(
+        modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { snackbarHost?.let { SnackbarHost(it) } },
+        floatingActionButton = floatingActionButton,
+    ) { padding ->
+        //只保留底部：顶部栏由 MainScreen 负责，左右由 contentPadding 负责。
+        val bottomOnly = PaddingValues(bottom = padding.calculateBottomPadding())
+        content(bottomOnly)
+    }
+}
 
 /* ══════════════════ 搜索工具条 ══════════════════ */
 
@@ -1313,10 +1356,10 @@ fun formatUpTime(seconds: Long): String {
 fun formatTime(ms: Long): String =
     SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(ms))
 
-/** 把 0/1、"true"/"false"、bool 统一成布尔。 */
-fun Any?.toBoolState(): Boolean = when (this) {
-    null -> false
-    is Boolean -> this
-    is Number -> toInt() == 1
-    else -> toString() == "1" || toString().equals("true", ignoreCase = true)
-}
+/**
+ * 把 0/1、"true"/"false"、bool 统一成布尔。
+ *
+ * 委托给 [asBool] 而不是自己再写一遍：这里的 `else -> toString() == "1"`
+ * 与 util里的实现是同一套规则，两处各写一份迟早会分叉。
+ */
+fun Any?.toBoolState(): Boolean = asBool()

@@ -57,10 +57,9 @@ fun ReportScreen() {
     // AutoRefresh 首帧就会执行一次，留着等于每次进页面发两遍请求。
     AutoRefresh(intervalMillis = 8_000L, isLoading = vm.loading) { vm.load() }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbar) }
-    ) { padding ->
+    // SubPageScaffold 而不是 Scaffold：内层 Scaffold 会再消费一遍
+    // windowInsets，顶部多出约 250px 空白（详见 SubPageScaffold 注释）。
+    SubPageScaffold(snackbarHost = snackbar) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             // Tab 栏直接贴父容器，**不要**再套一层带 padding 的 Column。
             //
